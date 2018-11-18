@@ -25,38 +25,153 @@ extern "C" {
 /*
  * AG Header
  */
-    typedef struct XFS_agheader {
-        // agheader 채우기
-    } XFS_agheader;
+    typedef struct {
+
+        //Reserved 4Sector
+    } xfs_agheader;
 
 /*
 ** Super Block
 */
     typedef struct {
-        // 슈퍼블록 기술
-    } XFS_sb;
+        __uint32_t sb_magicnum;
+        __uint32_t sb_blocksize;
+        xfs_rfsblock_t sb_dblocks;
+        xfs_rfsblock_t sb_rblocks;
+        xfs_rtblock_t sb_rextents;
+        uuid_t sb_uuid;
+        xfs_fsblock_t sb_logstart;
+        xfs_ino_t sb_rootino;
+        xfs_ino_t sb_rbmino;
+        xfs_ino_t sb_rsumino;
+        xfs_agblock_t sb_rextsize;
+        xfs_agblock_t sb_agblocks;
+        xfs_agnumber_t sb_agcount;
+        xfs_extlen_t sb_rbmblocks;
+        xfs_extlen_t sb_logblocks;
+        __uint16_t sb_versionnum;
+        __uint16_t sb_sectsize;
+        __uint16_t sb_inodesize;
+        __uint16_t sb_inopblock;
+        char sb_fname[12];
+        __uint8_t sb_blocklog;
+        __uint8_t sb_sectlog;
+        __uint8_t sb_inodelog;
+        __uint8_t sb_inopblog;
+        __uint8_t sb_agblklog;
+        __uint8_t sb_rextslog;
+        __uint8_t sb_inprogress;
+        __uint8_t sb_imax_pct;
+        __uint64_t sb_icount;
+        __uint64_t sb_ifree;
+        __uint64_t sb_fdblocks;
+        __uint64_t sb_frextents;
+        xfs_ino_t sb_uquotino;
+        xfs_ino_t sb_gquotino;
+        __uint16_t sb_qflags;
+        __uint8_t sb_flags;
+        __uint8_t sb_shared_vn;
+        xfs_extlen_t sb_inoalignmt;
+        __uint32_t sb_unit;
+        __uint32_t sb_width;
+        __uint8_t sb_dirblklog;
+        __uint8_t sb_logsectlog;
+        __uint16_t sb_logsectsize;
+        __uint32_t sb_logsunit;
+        __uint32_t sb_features2;
+        __uint32_t sb_bad_features2;
+        __uint32_t sb_features_compat;
+        __uint32_t sb_features_ro_compat;
+        __uint32_t sb_features_incompat;
+        __uint32_t sb_features_log_incompat;
+        __uint32_t sb_crc;
+        xfs_extlen_t sb_spino_align;
+        xfs_ino_t sb_pquotino;
+        xfs_lsn_t sb_lsn;
+        uuid_t sb_meta_uuid;
+        xfs_ino_t sb_rrmapino;
+    } xfs_sb;
 
 /*
 ** AG Free block info
 */
     typedef struct {
-        //d
-    } XFS_fbInfo;
+        __be32 agf_magicnum;
+        __be32 agf_versionnum;
+        __be32 agf_seqno;
+        __be32 agf_length;
+        __be32 agf_roots[XFS_BTNUM_AGF];
+        __be32 agf_levels[XFS_BTNUM_AGF];
+        __be32 agf_flfirst;
+        __be32 agf_fllast;
+        __be32 agf_flcount;
+        __be32 agf_freeblks;
+        __be32 agf_longest;
+        __be32 agf_btreeblks;
+        uuid_t agf_uuid;
+        __be32 agf_rmap_blocks;
+        __be32 agf_refcount_blocks;
+        __be32 agf_refcount_root;
+        __be32 agf_refcount_level;
+        __be64 agf_spare64[14];
+        __be64 agf_lsn;
+        __be32 agf_crc;
+        __be32 agf_spare2;
+    } xfs_agf;
 
 /*
 ** AG B+ Tree Info
 */
     typedef struct {
-        //d
-    } XFS_bpTreeInfo;
+        __be32 agi_magicnum;
+        __be32 agi_versionnum;
+        __be32 agi_seqno
+        __be32 agi_length;
+        __be32 agi_count;
+        __be32 agi_root;
+        __be32 agi_level;
+        __be32 agi_freecount;
+        __be32 agi_newino;
+        __be32 agi_dirino;
+        __be32 agi_unlinked[64];
+        uuid_t agi_uuid;
+        __be32 agi_crc;
+        __be32 agi_pad32;
+        __be64 agi_lsn;
+        __be32 agi_free_root;
+        __be32 agi_free_level;
+    } XFS_agi;
 
 /*
 ** AG Internal Free List
 */
     typedef struct {
-        //d
-    } XFS_intFreeList;
+        //1Sector 주요한 내용이 없으므로 비워놔도 무방
+    } xfs_agfl;
 
+/*
+ * Root AG B+ Tree Info
+*/
+    typedef struct {
+        __be32 ragi_magicnum;
+        __be16 ragi_treelevel;
+        __be16 ragi_recordnum;
+        __be32 ragi_leftsib;
+        __be32 ragi_rightsib;
+        __be64 ragi_blocknum;
+        __be64 ragi_lsnum;
+        uuid_t ragi_uuid;
+        __be32 ragi_owner;
+        __be32 ragi_crc;
+        /*
+        *treelevel 1일때
+        * start inode 4바이트, Free Count 4바이트, Famsk 4바이트 쌍 recordnum 개
+        *treelevel 2일때
+        * start inode 4바이트 recordnum개, AG Blocknum 4바이트 recordnum개
+        */
+    } xfs_ragi
+    
+    
 /*
  * Inodev2
  */
@@ -75,22 +190,134 @@ extern "C" {
  * Inode core
  */
     typedef struct {
+        __uint16_t di_magic;
+        __uint16_t di_mode;
+        __int8_t di_version;
+        __int8_t di_format;
+        __uint16_t di_onlink;
+        __uint32_t di_uid;
+        __uint32_t di_gid;
+        __uint32_t di_nlink;
+        __uint16_t di_projid;
+        __uint16_t di_projid_hi;
+        __uint8_t di_pad[6];
+        __uint16_t di_flushiter;
+        xfs_timestamp_t di_atime;
+        xfs_timestamp_t di_mtime;
+        xfs_timestamp_t di_ctime;
+        xfs_fsize_t di_size;
+        xfs_rfsblock_t di_nblocks;
+        xfs_extlen_t di_extsize;
+        xfs_extnum_t di_nextents;
+        xfs_aextnum_t di_anextents;
+        __uint8_t di_forkoff;
+        __int8_t di_aformat;
+        __uint32_t di_dmevmask;
+        __uint16_t di_dmstate;
+        __uint16_t di_flags;
+        __uint32_t di_gen;
+        __be32 di_next_unlinked;
+        __le32 di_crc;
+        __be64 di_changecount;
+        __be64 di_lsn;
+        __be64 di_flags2;
+        __be32 di_cowextsize;
+        __u8 di_pad2[12];
+        xfs_timestamp_t di_crtime;
+        __be64 di_ino;
+        uuid_t di_uuid;
+    } xfs_dinode_core;
 
-    } XFS_INODE_CORE;
+/*
+ * Inode data Format
+ */
+    typedef enum xfs_dinode_fmt {
+        XFS_DINODE_FMT_DEV,
+        XFS_DINODE_FMT_LOCAL,
+        XFS_DINODE_FMT_EXTENTS,
+        XFS_DINODE_FMT_BTREE,
+        XFS_DINODE_FMT_UUID,
+        XFS_DINODE_FMT_RMAP,
+    } xfs_dinode_fmt_t;
 
+    typedef struct {
+        __int32_t t_sec;
+        __int32_t t_nsec;
+    } xfs_timestamp;
+  
 /*
  * Inode Data Fork
  */
     typedef struct {
-
+        
     } XFS_INODE_DATAFORK;
 
+/*
+ * Inode Data Fork - format1(directory)
+ */
+    typedef struct {
+        __u8 xfs_inode_format1_count;
+        __u8 xfs_inode_format1_i8count;
+        __be16 xfs_inode_format1_parentid;
+        __u8 xfs_inode_format1_namelen;
+        __u16 xfs_inode_format1_indexoffset;
+        //file name[xfs_inode_format1_namelen];
+        __u8 xfs_inode_format1_ftype;
+        __be16 xfs_inode_format1_ino;
+    } xfs_inode_format1;
+    
+/*
+ * Inode Data Fork - format2(extents)
+ */
+    typedef struct {
+        __be64 xfs_inode_format2_extent;
+    } xfs_inode_format2;
+    
+    
+/*
+ * Inode Data Fork - format3(B+ tree)
+ */
+    typedef struct {
+        // I don't know
+    } xfs_inode_format3;
+    
+/*
+ * Data Extents
+ */
+    typedef struct {
+        xfs_fileoff_t br_startoff;
+        xfs_fsblock_t br_startblock;
+        xfs_filblks_t br_blockcount;
+        xfs_exntst_t br_state;
+    }xfs_bmbt_irec;
+    
+    typedef enum {
+        XFS_EXT_NORM,
+        XFS_EXT_UNWRITTEN,
+        XFS_EXT_INVALID
+    } xfs_exntst_t;
 /*
  * Root of inode b+ tree (b+tree, num, count 병합)
  */
     typedef struct {
         
     } XFS_INODE_BPTREE;
+    
+/*
+ * Short Format B+ trees
+ */
+   typedef struct {
+        __be32 bb_magic;
+        __be16 bb_level;
+        __be16 bb_numrecs;
+        __be32 bb_leftsib;
+        __be32 bb_rightsib;
+        __be64 bb_blkno;
+        __be64 bb_lsn;
+        uuid_t bb_uuid;
+        __be32 bb_owner;
+        __le32 bb_crc;
+    }xfs_btree_sblock;
 
 /* MODE */
 #define XFS_IN_FMT  0170000
