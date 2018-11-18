@@ -184,3 +184,5 @@ unit_tests/base/test_base
 #Test data folder
 
 tests/data
+/.tags
+/.tags_sorted_by_file
