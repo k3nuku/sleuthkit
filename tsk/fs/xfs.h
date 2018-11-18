@@ -14,8 +14,8 @@ extern "C" {
 */
 #define XFS_FIRSTINO    1    /* inode 1 contains the bad blocks */
 #define XFS_ROOTINO     2    /* location of root directory inode */
-#define XFS_SBOFF       1024    // 슈퍼블록 오프셋
-#define XFS_FS_MAGIC    0xef53  // magic number
+#define XFS_SBOFF       0    // 슈퍼블록 오프셋
+#define XFS_FS_MAGIC    0x58465342  // magic number
 #define XFS_MAXNAMLEN    255    // 최대 파일이름길이
 #define XFS_MAXPATHLEN   4096   // 최대 디렉토리 길이
 #define XFS_MIN_BLOCK_SIZE   1024   // 최소 블록사이즈
