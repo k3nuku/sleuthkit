@@ -14,8 +14,8 @@ extern "C" {
 */
 #define XFS_FIRSTINO    1    /* inode 1 contains the bad blocks */
 #define XFS_ROOTINO     2    /* location of root directory inode */
-#define XFS_SBOFF       1024    // 슈퍼블록 오프셋
-#define XFS_FS_MAGIC    0xef53  // magic number
+#define XFS_SBOFF       0    // 슈퍼블록 오프셋
+#define XFS_FS_MAGIC    0x58465342  // magic number
 #define XFS_MAXNAMLEN    255    // 최대 파일이름길이
 #define XFS_MAXPATHLEN   4096   // 최대 디렉토리 길이
 #define XFS_MIN_BLOCK_SIZE   1024   // 최소 블록사이즈
@@ -26,7 +26,10 @@ extern "C" {
  * AG Header
  */
     typedef struct {
-
+        xfs_sb sb;
+        xfs_agf agf;
+        xfs_agi agi;
+        xfs_agfl agfl;
         //Reserved 4Sector
     } xfs_agheader;
 
@@ -36,19 +39,19 @@ extern "C" {
     typedef struct {
         __uint32_t sb_magicnum;
         __uint32_t sb_blocksize;
-        xfs_rfsblock_t sb_dblocks;
-        xfs_rfsblock_t sb_rblocks;
-        xfs_rtblock_t sb_rextents;
+        __uint64_t sb_dblocks;
+        __uint64_t sb_rblocks;
+        __uint64_t sb_rextents;
         uuid_t sb_uuid;
-        xfs_fsblock_t sb_logstart;
-        xfs_ino_t sb_rootino;
-        xfs_ino_t sb_rbmino;
-        xfs_ino_t sb_rsumino;
-        xfs_agblock_t sb_rextsize;
-        xfs_agblock_t sb_agblocks;
-        xfs_agnumber_t sb_agcount;
-        xfs_extlen_t sb_rbmblocks;
-        xfs_extlen_t sb_logblocks;
+        __uint64_t sb_logstart;
+        __uint64_t sb_rootino;
+        __uint64_t sb_rbmino;
+        __uint64_t sb_rsumino;
+        __uint32_t sb_rextsize;
+        __uint32_t sb_agblocks;
+        __uint32_t sb_agcount;
+        __uint32_t sb_rbmblocks;
+        __uint32_t sb_logblocks;
         __uint16_t sb_versionnum;
         __uint16_t sb_sectsize;
         __uint16_t sb_inodesize;
@@ -66,12 +69,12 @@ extern "C" {
         __uint64_t sb_ifree;
         __uint64_t sb_fdblocks;
         __uint64_t sb_frextents;
-        xfs_ino_t sb_uquotino;
-        xfs_ino_t sb_gquotino;
+        __uint64_t sb_uquotino;
+        __uint64_t sb_gquotino;
         __uint16_t sb_qflags;
         __uint8_t sb_flags;
         __uint8_t sb_shared_vn;
-        xfs_extlen_t sb_inoalignmt;
+        __uint32_t sb_inoalignmt;
         __uint32_t sb_unit;
         __uint32_t sb_width;
         __uint8_t sb_dirblklog;
@@ -85,9 +88,9 @@ extern "C" {
         __uint32_t sb_features_incompat;
         __uint32_t sb_features_log_incompat;
         __uint32_t sb_crc;
-        xfs_extlen_t sb_spino_align;
-        xfs_ino_t sb_pquotino;
-        xfs_lsn_t sb_lsn;
+        __uint32_t sb_spino_align;
+        __uint32_t sb_pquotino;
+        __int64_t sb_lsn;
         uuid_t sb_meta_uuid;
         xfs_ino_t sb_rrmapino;
     } xfs_sb;
@@ -205,11 +208,11 @@ extern "C" {
         xfs_timestamp_t di_atime;
         xfs_timestamp_t di_mtime;
         xfs_timestamp_t di_ctime;
-        xfs_fsize_t di_size;
-        xfs_rfsblock_t di_nblocks;
-        xfs_extlen_t di_extsize;
-        xfs_extnum_t di_nextents;
-        xfs_aextnum_t di_anextents;
+        __int64_t di_size;
+        __uint64_t di_nblocks;
+        __uint32_t di_extsize;
+        __int32_t di_nextents;
+        __int16_t di_anextents;
         __uint8_t di_forkoff;
         __int8_t di_aformat;
         __uint32_t di_dmevmask;
@@ -285,9 +288,9 @@ extern "C" {
  * Data Extents
  */
     typedef struct {
-        xfs_fileoff_t br_startoff;
-        xfs_fsblock_t br_startblock;
-        xfs_filblks_t br_blockcount;
+        __uint64_t br_startoff;
+        __uint64_t br_startblock;
+        __uint64_t br_blockcount;
         xfs_exntst_t br_state;
     }xfs_bmbt_irec;
     
