@@ -1,12 +1,119 @@
 #ifndef _TSK_XFS_H
 #define _TSK_XFS_H
 
+#include "tsk_fs_i.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define XFS_SBOFF 0 // Superblock offset
-    
+// start offset of superblock
+#define XFS_SBOFF 0
+
+// fs magicnumber
+#define XFS_FS_MAGIC 0x58465342
+
+// superblock related constants & macros
+// sb version
+#define XFS_SB_VERSION_1    1       /* 5.3, 6.0.1, 6.1 */
+#define XFS_SB_VERSION_2    2       /* 6.2 - attributes */
+#define XFS_SB_VERSION_3    3       /* 6.2 - new inode version */
+#define XFS_SB_VERSION_4    4       /* 6.2+ - bitmask version */
+#define XFS_SB_VERSION_5    5       /* CRC enabled filesystem */
+
+// sb version checker
+static inline bool xfs_sb_good_version(struct xfs_sb *sbp)
+{
+    if (tsk_fs_guessu8(sbp->sb_versionnum, XFS_SB_VERSION_5))
+        return true;
+    if (tsk_fs_guessu8(sbp->sb_versionnum, XFS_SB_VERSION_4))
+    { // checking v4 feature
+        tsk_fprintf(stderr, "Found superblock version 4, continuing with version 5 analyzer");
+        return true; // 일단 v4는 미구현
+        //return xfs_sb_good_v4_features(sbp);
+    }
+    return false;
+}
+
+// sb version bitmask
+#define XFS_SB_VERSION_NUMBITS      0x000f
+#define XFS_SB_VERSION_ALLFBITS     0xfff0
+#define XFS_SB_VERSION_ATTRBIT      0x0010
+#define XFS_SB_VERSION_NLINKBIT     0x0020
+#define XFS_SB_VERSION_QUOTABIT     0x0040
+#define XFS_SB_VERSION_ALIGNBIT     0x0080
+#define XFS_SB_VERSION_DALIGNBIT    0x0100
+#define XFS_SB_VERSION_SHAREDBIT    0x0200
+#define XFS_SB_VERSION_LOGV2BIT     0x0400
+#define XFS_SB_VERSION_SECTORBIT    0x0800
+#define XFS_SB_VERSION_EXTFLGBIT    0x1000
+#define XFS_SB_VERSION_DIRV2BIT     0x2000
+#define XFS_SB_VERSION_BORGBIT      0x4000  /* ASCII only case-insens. */
+#define XFS_SB_VERSION_MOREBITSBIT  0x8000
+
+// Checking if sb has compat feature
+static inline bool
+xfs_sb_has_compat_feature(
+    struct xfs_sb   *sbp,
+    uint32_t    feature)
+{
+    return tsk_fs_guessu32(sbp->sb_features_compat & feature) != 0;
+}
+
+// superblock feature ro compat: for normal blocks
+#define XFS_SB_FEAT_RO_COMPAT_FINOBT   (1 << 0)     /* free inode btree */
+#define XFS_SB_FEAT_RO_COMPAT_RMAPBT   (1 << 1)     /* reverse map btree */
+#define XFS_SB_FEAT_RO_COMPAT_REFLINK  (1 << 2)     /* reflinked files */
+#define XFS_SB_FEAT_RO_COMPAT_ALL \
+        (XFS_SB_FEAT_RO_COMPAT_FINOBT | \
+         XFS_SB_FEAT_RO_COMPAT_RMAPBT | \
+         XFS_SB_FEAT_RO_COMPAT_REFLINK)
+#define XFS_SB_FEAT_RO_COMPAT_UNKNOWN   ~XFS_SB_FEAT_RO_COMPAT_ALL
+
+// checking if sb has ro compat feature
+static inline bool xfs_sb_has_ro_compat_feature(
+    struct xfs_sb   *sbp,
+    uint32_t    feature)
+{
+    return !tsk_fs_guessu32(sbp->sb_features_ro_compat & feature, 0);
+}
+
+// superblock feature ro compat: for journal
+#define XFS_SB_FEAT_INCOMPAT_FTYPE  (1 << 0)    /* filetype in dirent */
+#define XFS_SB_FEAT_INCOMPAT_SPINODES   (1 << 1)    /* sparse inode chunks */
+#define XFS_SB_FEAT_INCOMPAT_META_UUID  (1 << 2)    /* metadata UUID */
+#define XFS_SB_FEAT_INCOMPAT_ALL \
+        (XFS_SB_FEAT_INCOMPAT_FTYPE|    \
+         XFS_SB_FEAT_INCOMPAT_SPINODES| \
+         XFS_SB_FEAT_INCOMPAT_META_UUID)
+#define XFS_SB_FEAT_INCOMPAT_UNKNOWN    ~XFS_SB_FEAT_INCOMPAT_ALL
+
+#define XFS_SB_FEAT_INCOMPAT_LOG_ALL 0
+#define XFS_SB_FEAT_INCOMPAT_LOG_UNKNOWN    ~XFS_SB_FEAT_INCOMPAT_LOG_ALL
+
+static inline bool xfs_sb_has_incompat_feature(
+    struct xfs_sb   *sbp,
+    uint32_t    feature)
+{
+    return !tsk_fs_guessu32(sbp->sb_features_incompat & feature, 0);
+}
+
+static inline bool xfs_sb_has_incompat_log_feature(
+    struct xfs_sb   *sbp,
+    uint32_t    feature)
+{
+    return !tsk_fs_guessu32(sbp->sb_features_log_incompat & feature, 0);
+}
+
+// Macros
+// crc offset of sb
+#define XFS_SB_CRC_OFF      offsetof(struct xfs_sb, sb_crc)
+
+// does sb has crc?
+static inline bool xfs_sb_version_hascrc(struct xfs_sb *sbp)
+{
+    return tsk_fs_guessu8(sbp->sb_versionum, XFS_SB_VERSION_5);
+}
 
 /*
     Superblock - Must be padded to 64 bit alignment.
@@ -299,7 +406,7 @@ typedef struct xfs_inobt_rec {
             uint8_t  ir_holemask[2];/* hole mask for sparse chunks */
             uint8_t  ir_count;   /* total inode count */
             uint8_t  ir_freecount;   /* count of free inodes */
-        } sp;
+        } sp; // sparse inode
     } ir_u;
     uint8_t      ir_free[8];    /* free inode mask */
 } xfs_inobt_rec_t;
