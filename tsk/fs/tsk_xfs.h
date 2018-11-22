@@ -7,11 +7,81 @@
 extern "C" {
 #endif
 
+#define howmany(x, y)   (((x)+((y)-1))/(y))
+
+// for checking filesystem sanity checking
+#define XFS_MAX_DBLOCKS(s) ( \
+    tsk_getu32((xfs_rfsblock_t)(s)->sb_agcount) * \
+    tsk_getu32((s)->sb_agblocks))
+
+#define XFS_MIN_DBLOCKS(s) ( \
+    (tsk_getu32((xfs_rfsblock_t)((s)->sb_agcount)) - 1) * \
+     tsk_getu32((s)->sb_agblocks) + XFS_MIN_AG_BLOCKS)
+
+/*
+ * Minimum and maximum blocksize and sectorsize.
+ * The blocksize upper limit is pretty much arbitrary.
+ * The sectorsize upper limit is due to sizeof(sb_sectsize).
+ * CRC enable filesystems use 512 byte inodes, meaning 512 byte block sizes
+ * cannot be used.
+ */
+#define XFS_MIN_BLOCKSIZE_LOG   9   /* i.e. 512 bytes */
+#define XFS_MAX_BLOCKSIZE_LOG   16  /* i.e. 65536 bytes */
+#define XFS_MIN_BLOCKSIZE   (1 << XFS_MIN_BLOCKSIZE_LOG)
+#define XFS_MAX_BLOCKSIZE   (1 << XFS_MAX_BLOCKSIZE_LOG)
+#define XFS_MIN_CRC_BLOCKSIZE   (1 << (XFS_MIN_BLOCKSIZE_LOG + 1))
+#define XFS_MIN_SECTORSIZE_LOG  9   /* i.e. 512 bytes */
+#define XFS_MAX_SECTORSIZE_LOG  15  /* i.e. 32768 bytes */
+#define XFS_MIN_SECTORSIZE  (1 << XFS_MIN_SECTORSIZE_LOG)
+#define XFS_MAX_SECTORSIZE  (1 << XFS_MAX_SECTORSIZE_LOG)
+    
+/*
+ * Inode minimum and maximum sizes.
+ */
+#define XFS_DINODE_MIN_LOG  8
+#define XFS_DINODE_MAX_LOG  11
+#define XFS_DINODE_MIN_SIZE (1 << XFS_DINODE_MIN_LOG)
+#define XFS_DINODE_MAX_SIZE (1 << XFS_DINODE_MAX_LOG)
+
+// XFS Log (journal) constants
+#define XLOG_MIN_ICLOGS     2
+#define XLOG_MAX_ICLOGS     8
+#define XLOG_HEADER_MAGIC_NUM   0xFEEDbabe  /* Invalid cycle number */
+#define XLOG_VERSION_1      1
+#define XLOG_VERSION_2      2       /* Large IClogs, Log sunit */
+#define XLOG_VERSION_OKBITS (XLOG_VERSION_1 | XLOG_VERSION_2)
+#define XLOG_MIN_RECORD_BSIZE   (16*1024)   /* eventually 32k */
+#define XLOG_BIG_RECORD_BSIZE   (32*1024)   /* 32k buffers */
+#define XLOG_MAX_RECORD_BSIZE   (256*1024)
+#define XLOG_HEADER_CYCLE_SIZE  (32*1024)   /* cycle data in header */
+#define XLOG_MIN_RECORD_BSHIFT  14      /* 16384 == 1 << 14 */
+#define XLOG_BIG_RECORD_BSHIFT  15      /* 32k == 1 << 15 */
+#define XLOG_MAX_RECORD_BSHIFT  18      /* 256k == 1 << 18 */
+#define XLOG_BTOLSUNIT(log, b)  (((b)+(log)->l_mp->m_sb.sb_logsunit-1) / \
+                                 (log)->l_mp->m_sb.sb_logsunit)
+#define XLOG_LSUNITTOB(log, su) ((su) * (log)->l_mp->m_sb.sb_logsunit)
+#define XLOG_HEADER_SIZE    512
+
+/* Minimum number of transactions that must fit in the log (defined by mkfs) */
+#define XFS_MIN_LOG_FACTOR  3
+
+/*
+ * RealTime Device format definitions
+ */
+
+/* Min and max rt extent sizes, specified in bytes */
+#define XFS_MAX_RTEXTSIZE   (1024 * 1024 * 1024)    /* 1GB */
+#define XFS_DFL_RTEXTSIZE   (64 * 1024)         /* 64kB */
+#define XFS_MIN_RTEXTSIZE   (4 * 1024)      /* 4kB */
+
 // start offset of superblock
 #define XFS_SBOFF 0
 
 // fs magicnumber
 #define XFS_FS_MAGIC 0x58465342
+
+// first inode number
+#define XFS_FIRSTINO 0 // it
 
 // superblock related constants & macros
 // sb version
@@ -614,6 +684,27 @@ typedef struct xfs_dir2_data_entry {
      /* __u8            filetype; */    /* type of inode we point to */
      /* __be16                  tag; */     /* starting offset of us */
 } xfs_dir2_data_entry_t;
+
+/*
+ * define a structure for all the verification fields we are adding to the
+ * directory block structures. This will be used in several structures.
+ * The magic number must be the first entry to align with all the dir2
+ * structures so we determine how to decode them just by the magic number.
+ */
+struct xfs_dir3_blk_hdr {
+    __be32          magic;  /* magic number */
+    __be32          crc;    /* CRC of block */
+    __be64          blkno;  /* first block of the buffer */
+    __be64          lsn;    /* sequence number of last write */
+    uuid_t          uuid;   /* filesystem we belong to */
+    __be64          owner;  /* inode that owns the block */
+};
+
+struct xfs_dir3_data_hdr {
+    struct xfs_dir3_blk_hdr hdr;
+    xfs_dir2_data_free_t    best_free[XFS_DIR2_DATA_FD_COUNT];
+    __be32          pad;    /* 64 bit alignment */
+};
 
 /*
     Data block structure:: empty entry
