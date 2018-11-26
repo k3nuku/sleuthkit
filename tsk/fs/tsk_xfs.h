@@ -365,31 +365,31 @@ typedef struct xfs_agfl {
 } __attribute__((packed)) xfs_agfl_t;
 
 /*
-    Inode
+    Inode core (data fork or attr fork should follow after this struct)
 */
 typedef struct xfs_dinode {
     uint8_t      di_magic[2];   /* inode magic # = XFS_DINODE_MAGIC */
     uint8_t      di_mode[2];    /* mode and type of file */
-    uint8_t        di_version; /* inode version */
-    uint8_t        di_format;  /* format of di_c data */
+    uint8_t      di_version; /* inode version */
+    uint8_t      di_format;  /* format of di_c data */
     uint8_t      di_onlink[2];  /* old number of links to file */
     uint8_t      di_uid[4];     /* owner's user id */
     uint8_t      di_gid[4];     /* owner's group id */
     uint8_t      di_nlink[4];   /* number of links to file */
     uint8_t      di_projid_lo[2];   /* lower part of owner's project id */
     uint8_t      di_projid_hi[2];   /* higher part owner's project id */
-    uint8_t        di_pad[6];  /* unused, zeroed space */
+    uint8_t      di_pad[6];  /* unused, zeroed space */
     uint8_t      di_flushiter[2];   /* incremented on flush */
-    xfs_timestamp_t di_atime;   /* time last accessed */
-    xfs_timestamp_t di_mtime;   /* time last modified */
-    xfs_timestamp_t di_ctime;   /* time created/inode modified */
+    uint8_t      di_atime[8];   /* time last accessed: front4: sec, rear4: nsec */
+    uint8_t      di_mtime[8];   /* time last modified */
+    uint8_t      di_ctime[8];   /* time created/inode modified */
     uint8_t      di_size[8];    /* number of bytes in file */
     uint8_t      di_nblocks[8]; /* # of direct & btree blocks used */
     uint8_t      di_extsize[4]; /* basic/minimum extent size for file */
     uint8_t      di_nextents[4];    /* number of extents in data fork */
     uint8_t      di_anextents[2];   /* number of extents in attribute fork*/
-    uint8_t        di_forkoff; /* attr fork offs, <<3 for 64b align */
-    int8_t        di_aformat; /* format of attr fork's data */
+    uint8_t      di_forkoff; /* attr fork offs, <<3 for 64b align */
+    int8_t       di_aformat; /* format of attr fork's data */
     uint8_t      di_dmevmask[4];    /* DMIG event mask */
     uint8_t      di_dmstate[2]; /* DMIG state info */
     uint8_t      di_flags[2];   /* random flags, XFS_DIFLAG_... */
@@ -413,6 +413,11 @@ typedef struct xfs_dinode {
 
     /* structure must be padded to 64 bit alignment */
 } xfs_dinode_t;
+
+typedef struct xfs_timestamp {
+    __be32      t_sec;      /* timestamp seconds */
+    __be32      t_nsec;     /* timestamp nanoseconds */
+} xfs_timestamp_t;
 
 /*
     Internal Inode - Quota Inode

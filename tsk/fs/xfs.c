@@ -465,131 +465,18 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
 TSK_FS_BLOCK_FLAG_ENUM
 xfs_block_getflags(TSK_FS_INFO * a_fs, TSK_DADDR_T a_addr)
 {
-    EXT2FS_INFO *ext2fs = (EXT2FS_INFO *) a_fs;
-    int flags;
-    EXT2_GRPNUM_T grp_num;
-    TSK_DADDR_T dbase = 0;      /* first block number in group */
-    TSK_DADDR_T dmin = 0;       /* first block after inodes */
-
-    // these blocks are not described in the group descriptors
-    // sparse
-    if (a_addr == 0)
-        return TSK_FS_BLOCK_FLAG_CONT | TSK_FS_BLOCK_FLAG_ALLOC;
-    if (a_addr < ext2fs->first_data_block)
-        return TSK_FS_BLOCK_FLAG_META | TSK_FS_BLOCK_FLAG_ALLOC;
-
-    grp_num = ext2_dtog_lcl(a_fs, ext2fs->fs, a_addr);
-
-    /* lock access to bmap_buf */
-    tsk_take_lock(&ext2fs->lock);
-
-    /* Lookup bitmap if not loaded */
-    if (ext2fs_bmap_load(ext2fs, grp_num)) {
-        tsk_release_lock(&ext2fs->lock);
-        return 0;
-    }
-
-    /*
-     * Be sure to use the right group descriptor information. XXX There
-     * appears to be an off-by-one discrepancy between bitmap offsets and
-     * disk block numbers.
-     *
-     * Addendum: this offset is controlled by the super block's
-     * s_first_data_block field.
-     */
-    dbase = ext2_cgbase_lcl(a_fs, ext2fs->fs, grp_num);
-    flags = (isset(ext2fs->bmap_buf, a_addr - dbase) ?
-        TSK_FS_BLOCK_FLAG_ALLOC : TSK_FS_BLOCK_FLAG_UNALLOC);
     
-    /*
-     *  Identify meta blocks
-     * (any blocks that can't be allocated for file/directory data).
-     *
-     * XXX With sparse superblock placement, most block groups have the
-     * block and inode bitmaps where one would otherwise find the backup
-     * superblock and the backup group descriptor blocks. The inode
-     * blocks are in the normal place, though. This leaves little gaps
-     * between the bitmaps and the inode table - and ext2fs will use
-     * those blocks for file/directory data blocks. So we must properly
-     * account for those gaps between meta blocks.
-     *
-     * Thus, superblocks and group descriptor blocks are sometimes overlaid
-     * by bitmap blocks. This means that one can still assume that the
-     * locations of superblocks and group descriptor blocks are reserved.
-     * They just happen to be reserved for something else :-)
-     */
-
-    if (ext2fs->ext4_grp_buf != NULL) {
-        dmin = ext4_getu64(a_fs->endian, ext2fs->ext4_grp_buf->bg_inode_table_hi,
-                    ext2fs->ext4_grp_buf->bg_inode_table_lo) + + INODE_TABLE_SIZE(ext2fs);
-
-        if ((a_addr >= dbase
-                && a_addr < ext4_getu64(a_fs->endian, 
-                ext2fs->ext4_grp_buf->bg_block_bitmap_hi,
-                ext2fs->ext4_grp_buf->bg_block_bitmap_lo))
-            || (a_addr == ext4_getu64(a_fs->endian, 
-                ext2fs->ext4_grp_buf->bg_block_bitmap_hi,
-                ext2fs->ext4_grp_buf->bg_block_bitmap_lo))
-            || (a_addr == ext4_getu64(a_fs->endian, 
-                ext2fs->ext4_grp_buf->bg_inode_bitmap_hi,
-                ext2fs->ext4_grp_buf->bg_inode_bitmap_lo))
-            || (a_addr >= ext4_getu64(a_fs->endian, 
-                ext2fs->ext4_grp_buf->bg_inode_table_hi,
-                ext2fs->ext4_grp_buf->bg_inode_table_lo)
-                && a_addr < dmin))
-            flags |= TSK_FS_BLOCK_FLAG_META;
-        else
-            flags |= TSK_FS_BLOCK_FLAG_CONT;
-
-    }
-    else {
-        dmin =
-            tsk_getu32(a_fs->endian,
-            ext2fs->grp_buf->bg_inode_table) + INODE_TABLE_SIZE(ext2fs);
-
-        if ((a_addr >= dbase
-                && a_addr < tsk_getu32(a_fs->endian,
-                    ext2fs->grp_buf->bg_block_bitmap))
-            || (a_addr == tsk_getu32(a_fs->endian,
-                    ext2fs->grp_buf->bg_block_bitmap))
-            || (a_addr == tsk_getu32(a_fs->endian,
-                    ext2fs->grp_buf->bg_inode_bitmap))
-            || (a_addr >= tsk_getu32(a_fs->endian,
-                    ext2fs->grp_buf->bg_inode_table)
-                && a_addr < dmin))
-            flags |= TSK_FS_BLOCK_FLAG_META;
-        else
-            flags |= TSK_FS_BLOCK_FLAG_CONT;
-    }
-    
-    tsk_release_lock(&ext2fs->lock);
-    return (TSK_FS_BLOCK_FLAG_ENUM)flags;
 }
 
 /** \internal
- * Test if block group has a super block in it.
+ * Test if Allocation header has a super block in it.
  *
  * @return 1 if block group has superblock, otherwise 0
 */
 static uint32_t
 xfs_is_super_bg(uint32_t feature_ro_compat, uint32_t group_block)
 {
-    // if no sparse feature, then it has super block
-    if (!(feature_ro_compat & EXT2FS_FEATURE_RO_COMPAT_SPARSE_SUPER))
-        return 1;
-
-    // group 0 always has super block
-    if (group_block == 0) 
-        return 1;
-
-    // Sparse FS put super blocks in groups that are powers of 3, 5, 7
-    if (test_root(group_block, 3) || 
-            (test_root(group_block, 5)) ||
-            (test_root(group_block, 7))) {
-        return 1;
-    }
-
-    return 0;
+    
 }
 
 
@@ -601,25 +488,7 @@ static TSK_OFF_T
 xfs_make_data_run_extent(TSK_FS_INFO * fs_info, TSK_FS_ATTR * fs_attr,
     xfs_extent * extent)
 {
-    TSK_FS_ATTR_RUN *data_run;
-    data_run = tsk_fs_attr_run_alloc();
-    if (data_run == NULL) {
-        return 1;
-    }
-
-    data_run->offset = tsk_getu32(fs_info->endian, extent->ee_block);
-    data_run->addr =
-        (((uint32_t) tsk_getu16(fs_info->endian,
-                extent->ee_start_hi)) << 16) | tsk_getu32(fs_info->endian,
-        extent->ee_start_lo);
-    data_run->len = tsk_getu16(fs_info->endian, extent->ee_len);
-
-    // save the run
-    if (tsk_fs_attr_add_run(fs_info, fs_attr, data_run)) {
-        return 1;
-    }
-
-    return 0;
+    
 }
 
 
@@ -633,87 +502,7 @@ xfs_make_data_run_extent_index(TSK_FS_INFO * fs_info,
     TSK_FS_ATTR * fs_attr, TSK_FS_ATTR * fs_attr_extent,
     TSK_DADDR_T idx_block)
 {
-    ext2fs_extent_header *header;
-    TSK_FS_ATTR_RUN *data_run;
-    uint8_t *buf;
-    ssize_t cnt;
-    unsigned int i;
 
-    /* first, read the block specified by the parameter */
-    int fs_blocksize = fs_info->block_size;
-    if ((buf = (uint8_t *) tsk_malloc(fs_blocksize)) == NULL) {
-        return 1;
-    }
-
-    cnt =
-        tsk_fs_read_block(fs_info, idx_block, (char *) buf, fs_blocksize);
-    if (cnt != fs_blocksize) {
-        if (cnt >= 0) {
-            tsk_error_reset();
-            tsk_error_set_errno(TSK_ERR_FS_READ);
-        }
-        tsk_error_set_errstr("xfs_make_data_run_extent_index: Block %"
-            PRIuDADDR, idx_block);
-        free(buf);
-        return 1;
-    }
-    header = (ext2fs_extent_header *) buf;
-
-    /* add it to the extent attribute */
-    if (tsk_getu16(fs_info->endian, header->eh_magic) != 0xF30A) {
-        tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-        tsk_error_set_errstr
-            ("xfs_make_data_run_extent_index: extent header magic valid incorrect!");
-        free(buf);
-        return 1;
-    }
-
-    data_run = tsk_fs_attr_run_alloc();
-    if (data_run == NULL) {
-        free(buf);
-        return 1;
-    }
-    data_run->addr = idx_block;
-    data_run->len = fs_blocksize;
-
-    if (tsk_fs_attr_add_run(fs_info, fs_attr_extent, data_run)) {
-        tsk_fs_attr_run_free(data_run);
-        free(buf);
-        return 1;
-    }
-
-    /* process leaf nodes */
-    if (tsk_getu16(fs_info->endian, header->eh_depth) == 0) {
-        ext2fs_extent *extents = (ext2fs_extent *) (header + 1);
-        for (i = 0; i < tsk_getu16(fs_info->endian, header->eh_entries);
-            i++) {
-            ext2fs_extent extent = extents[i];
-            if (ext2fs_make_data_run_extent(fs_info, fs_attr, &extent)) {
-                free(buf);
-                return 1;
-            }
-        }
-    }
-    /* recurse on interior nodes */
-    else {
-        ext2fs_extent_idx *indices = (ext2fs_extent_idx *) (header + 1);
-        for (i = 0; i < tsk_getu16(fs_info->endian, header->eh_entries);
-            i++) {
-            ext2fs_extent_idx *index = &indices[i];
-            TSK_DADDR_T child_block =
-                (((uint32_t) tsk_getu16(fs_info->endian,
-                        index->ei_leaf_hi)) << 16) | tsk_getu32(fs_info->
-                endian, index->ei_leaf_lo);
-            if (ext2fs_make_data_run_extent_index(fs_info, fs_attr,
-                    fs_attr_extent, child_block)) {
-                free(buf);
-                return 1;
-            }
-        }
-    }
-
-    free(buf);
-    return 0;
 }
 
 /** \internal
@@ -726,59 +515,7 @@ static int32_t
 xfs_extent_tree_index_count(TSK_FS_INFO * fs_info,
     TSK_FS_META * fs_meta, ext2fs_extent_header * header)
 {
-    int fs_blocksize = fs_info->block_size;
-    ext2fs_extent_idx *indices;
-    int count = 0;
-    uint8_t *buf;
-    int i;
-
-    if (tsk_getu16(fs_info->endian, header->eh_magic) != 0xF30A) {
-        tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-        tsk_error_set_errstr
-            ("ext2fs_load_attrs: extent header magic valid incorrect!");
-        return -1;
-    }
-
-    if (tsk_getu16(fs_info->endian, header->eh_depth) == 0) {
-        return 0;
-    }
-
-    if ((buf = (uint8_t *) tsk_malloc(fs_blocksize)) == NULL) {
-        return -1;
-    }
-
-    indices = (ext2fs_extent_idx *) (header + 1);
-    for (i = 0; i < tsk_getu16(fs_info->endian, header->eh_entries); i++) {
-        ext2fs_extent_idx *index = &indices[i];
-        TSK_DADDR_T block =
-            (((uint32_t) tsk_getu16(fs_info->endian,
-                    index->ei_leaf_hi)) << 16) | tsk_getu32(fs_info->
-            endian, index->ei_leaf_lo);
-        ssize_t cnt =
-            tsk_fs_read_block(fs_info, block, (char *) buf, fs_blocksize);
-        int ret;
-
-        if (cnt != fs_blocksize) {
-            if (cnt >= 0) {
-                tsk_error_reset();
-                tsk_error_set_errno(TSK_ERR_FS_READ);
-            }
-            tsk_error_set_errstr2("ext2fs_extent_tree_index_count: Block %"
-                PRIuDADDR, block);
-            return -1;
-        }
-
-        if ((ret =
-                ext2fs_extent_tree_index_count(fs_info, fs_meta,
-                    (ext2fs_extent_header *) buf)) < 0) {
-            return -1;
-        }
-        count += ret;
-        count++;
-    }
-
-    free(buf);
-    return count;
+    
 }
 
 
@@ -791,138 +528,7 @@ xfs_extent_tree_index_count(TSK_FS_INFO * fs_info,
 static uint8_t
 xfs_load_attrs_extents(TSK_FS_FILE *fs_file)
 {
-    TSK_FS_META *fs_meta = fs_file->meta;
-    TSK_FS_INFO *fs_info = fs_file->fs_info;
-    TSK_OFF_T length = 0;
-    TSK_FS_ATTR *fs_attr;
-    int i;
-    ext2fs_extent *extents = NULL;
-    ext2fs_extent_idx *indices = NULL;
-    
-    ext2fs_extent_header *header = (ext2fs_extent_header *) fs_meta->content_ptr;
-    uint16_t num_entries = tsk_getu16(fs_info->endian, header->eh_entries);
-    uint16_t depth = tsk_getu16(fs_info->endian, header->eh_depth);
-    
-    if (tsk_getu16(fs_info->endian, header->eh_magic) != 0xF30A) {
-        tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-        tsk_error_set_errstr
-        ("xfs_load_attrs: extent header magic valid incorrect!");
-        return 1;
-    }
-    
-    if ((fs_meta->attr != NULL)
-        && (fs_meta->attr_state == TSK_FS_META_ATTR_STUDIED)) {
-        return 0;
-    }
-    else if (fs_meta->attr_state == TSK_FS_META_ATTR_ERROR) {
-        return 1;
-    }
 
-    if (fs_meta->attr != NULL) {
-        tsk_fs_attrlist_markunused(fs_meta->attr);
-    }
-    else {
-        fs_meta->attr = tsk_fs_attrlist_alloc();
-    }
-    
-    if (TSK_FS_TYPE_ISEXT(fs_info->ftype) == 0) {
-        tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-        tsk_error_set_errstr
-        ("xfs_load_attr: Called with non-XFS file system: %x",
-         fs_info->ftype);
-        return 1;
-    }
-    
-    length = roundup(fs_meta->size, fs_info->block_size);
-    
-    if ((fs_attr =
-         tsk_fs_attrlist_getnew(fs_meta->attr,
-                                TSK_FS_ATTR_NONRES)) == NULL) {
-        return 1;
-    }
-    
-    if (tsk_fs_attr_set_run(fs_file, fs_attr, NULL, NULL,
-                            TSK_FS_ATTR_TYPE_DEFAULT, TSK_FS_ATTR_ID_DEFAULT,
-                            fs_meta->size, fs_meta->size, length, 0, 0)) {
-        return 1;
-    }
-    
-    if (num_entries == 0) {
-        fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
-        return 0;
-    }
-    
-    if (depth == 0) {       /* leaf node */
-        if (num_entries >
-            (fs_info->block_size -
-             sizeof(ext2fs_extent_header)) /
-            sizeof(ext2fs_extent)) {
-            tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-            tsk_error_set_errstr
-            ("xfs_load_attr: Inode reports too many extents");
-            return 1;
-        }
-        
-        extents = (ext2fs_extent *) (header + 1);
-        for (i = 0; i < num_entries; i++) {
-            ext2fs_extent extent = extents[i];
-            if (ext2fs_make_data_run_extent(fs_info, fs_attr, &extent)) {
-                return 1;
-            }
-        }
-    }
-    else {                  /* interior node */
-        TSK_FS_ATTR *fs_attr_extent;
-        int32_t extent_index_size;
-        
-        if (num_entries >
-            (fs_info->block_size -
-             sizeof(ext2fs_extent_header)) /
-            sizeof(ext2fs_extent_idx)) {
-            tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
-            tsk_error_set_errstr
-            ("xfs_load_attr: Inode reports too many extent indices");
-            return 1;
-        }
-        
-        if ((fs_attr_extent =
-             tsk_fs_attrlist_getnew(fs_meta->attr,
-                                    TSK_FS_ATTR_NONRES)) == NULL) {
-             return 1;
-         }
-        
-        extent_index_size =
-        ext2fs_extent_tree_index_count(fs_info, fs_meta, header);
-        if (extent_index_size < 0) {
-            return 1;
-        }
-        
-        if (tsk_fs_attr_set_run(fs_file, fs_attr_extent, NULL, NULL,
-                                TSK_FS_ATTR_TYPE_UNIX_EXTENT, TSK_FS_ATTR_ID_DEFAULT,
-                                fs_info->block_size * extent_index_size,
-                                fs_info->block_size * extent_index_size,
-                                fs_info->block_size * extent_index_size, 0, 0)) {
-            return 1;
-        }
-        
-        indices = (ext2fs_extent_idx *) (header + 1);
-        for (i = 0; i < num_entries; i++) {
-            ext2fs_extent_idx *index = &indices[i];
-            TSK_DADDR_T child_block =
-            (((uint32_t) tsk_getu16(fs_info->endian,
-                                    index->
-                                    ei_leaf_hi)) << 16) | tsk_getu32(fs_info->
-                                                                     endian, index->ei_leaf_lo);
-            if (ext2fs_make_data_run_extent_index(fs_info, fs_attr,
-                                                  fs_attr_extent, child_block)) {
-                return 1;
-            }
-        }
-    }
-    
-    fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
-    
-    return 0;
 }
 
 /** \internal
@@ -934,18 +540,103 @@ xfs_load_attrs_extents(TSK_FS_FILE *fs_file)
 static uint8_t
 xfs_load_attrs(TSK_FS_FILE * fs_file)
 {
-    if (fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_EXT4_EXTENTS) {
-        return ext4_load_attrs_extents(fs_file);
+
+}
+
+static TSK_RETVAL_ENUM
+xfs_dinode_copy(XFS_INFO *xfs, TSK_FS_META *fs_meta, const xfs_dinode *inode_buf,
+    TSK_INUM_T inum)
+{
+    TSK_FS_INFO *fs = (TSK_FS_INFO *)&xfs->fs_info;
+    xfs_dsb *sb = xfs->fs;
+
+    fs_meta->attr_state = TSK_FS_META_ATTR_EMPTY;
+
+    if (fs_meta->attr)
+        tsk_fs_attrlist_markunused(fs_meta->attr);
+
+    switch (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_FMT)
+    {
+        case XFS_IN_REG:
+            fs_meta->type = TSK_FS_META_TYPE_REG;
+            break;
+        case XFS_IN_DIR:
+            fs_meta->type = TSK_FS_META_TYPE_DIR;
+            break;
+        case XFS_IN_SOCK:
+            fs_meta->type = TSK_FS_META_TYPE_SOCK;
+            break;
+        case XFS_IN_LNK:
+            fs_meta->type = TSK_FS_META_TYPE_LNK;
+            break;
+        case XFS_IN_BLK:
+            fs_meta->type = TSK_FS_META_TYPE_BLK;
+            break;
+        case XFS_IN_CHR:
+            fs_meta->type = TSK_FS_META_TYPE_CHR;
+            break;
+        case XFS_IN_FIFO:
+            fs_meta->type = TSK_FS_META_TYPE_FIFO;
+            break;
+        default:
+            fs_meta->type = TSK_FS_META_TYPE_UNDEF;
+            break;
     }
-    else {
-        return tsk_fs_unix_make_data_run(fs_file);
-    }
+
+    // set the mode
+    fs_meta->mode = 0;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_ISUID)
+        fs_meta->mode |= TSK_FS_META_MODE_ISUID;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_ISGID)
+        fs_meta->mode |= TSK_FS_META_MODE_ISGID;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_ISVTX)
+        fs_meta->mode |= TSK_FS_META_MODE_ISVTX;
+
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IRUSR)
+        fs_meta->mode |= TSK_FS_META_MODE_IRUSR;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IWUSR)
+        fs_meta->mode |= TSK_FS_META_MODE_IWUSR;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IXUSR)
+        fs_meta->mode |= TSK_FS_META_MODE_IXUSR;
+
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IRGRP)
+        fs_meta->mode |= TSK_FS_META_MODE_IRGRP;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IWGRP)
+        fs_meta->mode |= TSK_FS_META_MODE_IWGRP;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IXGRP)
+        fs_meta->mode |= TSK_FS_META_MODE_IXGRP;
+
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IROTH)
+        fs_meta->mode |= TSK_FS_META_MODE_IROTH;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IWOTH)
+        fs_meta->mode |= TSK_FS_META_MODE_IWOTH;
+    if (tsk_getu16(fs->endian, inode_buf->di_mode) & XFS_IN_IXOTH)
+        fs_meta->mode |= TSK_FS_META_MODE_IXOTH;
+
+    fs_meta->nlink = tsk_getu32(fs->endian, inode_buf->di_nlink);
+    fs_meta->size = tsk_getu64(fs->endian, inode_buf->di_size);
+    fs_meta->addr = inum;
+
+    fs_meta->uid = tsk_get32(fs->endian, inode_buf->di_uid);
+    fs_meta->gid = tsk_get32(fs->endian, inode_buf->di_gid);
+
+    uint64_t a = tsk_get64(fs->endian, inode_buf->di_atime);
+    uint32_t nsec = a >> 32;
+    uint32_t sec = a & 0xFFFF;
+
+}
+
+xfs_timestamp_t xfs_get_timestamp(uint64_t data)
+{
+    
 }
 
 //inode walk
 uint8_t xfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start, TSK_INUM_T end,
     TSK_FS_META_FLAG_ENUM flags, TSK_FS_META_WALK_CB cb, void *ptr)
 {
+    // inode구하기
+    // inode generic format으로 copy
     return -1;
 }
 
@@ -962,12 +653,6 @@ TSK_FS_BLOCK_FLAG_ENUM xfs_block_getflags(TSK_FS_INFO * a_fs, TSK_DADDR_T a_addr
     int flags = 0;
 
     return flags;
-}
-
-//load_attrs
-uint8_t xfs_load_attrs(TSK_FS_FILE *)
-{
-    return -1;
 }
 
 //file_add_meta
@@ -988,12 +673,6 @@ uint8_t xfs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     return -1;
 }
 
-//fscheck
-uint8_t xfs_fscheck(TSK_FS_INFO *, FILE *)
-{
-    return -1;
-}
-
 //istat
 uint8_t xfs_istat(TSK_FS_INFO * fs, TSK_FS_ISTAT_FLAG_ENUM flags, FILE * hFile, TSK_INUM_T inum,
             TSK_DADDR_T numblock, int32_t sec_skew)
@@ -1005,6 +684,19 @@ uint8_t xfs_istat(TSK_FS_INFO * fs, TSK_FS_ISTAT_FLAG_ENUM flags, FILE * hFile, 
 void xfs_close(TSK_FS_INFO * fs)
 {
     return;
+}
+
+// callbacks
+//fscheck
+uint8_t xfs_fscheck(TSK_FS_INFO *, FILE *)
+{
+    return -1;
+}
+
+//load_attrs
+uint8_t xfs_load_attrs(TSK_FS_FILE *)
+{
+    return -1;
 }
 
 //jblk_walk
