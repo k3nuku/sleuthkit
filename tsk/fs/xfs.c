@@ -827,7 +827,7 @@ uint8_t xfs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     tsk_fprintf(hFile, "File System Type : %s\n", tmptypename);
     tsk_fprintf(hFile, "Vloume Name : %s\n", sb->sb_fname);
     //tsk_fprintf(hFile, "Volume ID : %" PRIu128 "\n", sb->sb_uuid);
-    tsk_fprint(hFile, "\n");
+    tsk_fprintf(hFile, "\n");
     
     if(tsk_getu32(fs->endian, sb->sb_features_incompat)) {
         tsk_fprintf(hFile, "InCompat Features: ");

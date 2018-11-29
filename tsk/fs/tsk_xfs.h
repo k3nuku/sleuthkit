@@ -1300,37 +1300,35 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
 }
 
 
-typedef struct xfs_bmbt_irec {
-    uint64_t        br_startoff;
-    uint32_t 	    br_startblock;
-    uint64_t        br_blockcount;
-    // xfs_exntst_t     br_state;
-} xfs_bmbt_irec_t;
+// typedef struct xfs_bmbt_irec {
+//     uint64_t        br_startoff;
+//     uint32_t 	    br_startblock;
+//     uint64_t        br_blockcount;
+//     // xfs_exntst_t     br_state;
+// } xfs_bmbt_irec_t;
 
-typedef struct xfs_bmbt_rec
-{
-	uint8_t			l0[8], l1[8];
-} xfs_bmbt_rec_t;
+// typedef struct xfs_bmbt_rec
+// {
+// 	uint8_t			l0[8], l1[8];
+// } xfs_bmbt_rec_t;
 
-static inline 
-struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t bmbt_rec){
-    fprintf(stderr, "xfs_extent_get_offset called.\n");
+// static inline 
+// struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t bmbt_rec){
+//     fprintf(stderr, "xfs_extent_get_offset called.\n");
 
-    TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
-    xfs_bmbt_irec_t rec;
+//     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
+//     xfs_bmbt_irec_t rec;
 
-    uint64_t br_start_off = tsk_getu64(fs->endian, &bmbt_rec.10) & (uint64_t)0x7fffffffffffffff; 
+//     uint64_t br_start_off = tsk_getu64(fs->endian, &bmbt_rec.10) & (uint64_t)0x7fffffffffffffff; 
 
-    //  tsk_getu64(fs->endian, xfs_bmbt_rec.10) << 64 +
-    //                  tsk_getu64(fs->endian, xfs_bmbt_rec.11) ;
-
-
-    TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
+//     //  tsk_getu64(fs->endian, xfs_bmbt_rec.10) << 64 +
+//     //                  tsk_getu64(fs->endian, xfs_bmbt_rec.11) ;
 
 
-    return offset;
-}
+//     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
 
 
+//     return offset;
+// }
 
 #endif
