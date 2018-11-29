@@ -2,7 +2,6 @@
 #define _TSK_XFS_H
 
 #include <stdbool.h>
-#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,7 +12,6 @@ typedef uint32_t  xfs_rfsblock_t; /* blockno in filesystem (raw) */
 typedef uint64_t XFS_AGNUM_T;
 typedef uint        xfs_dir2_data_aoff_t;   /* argument form */
 typedef uint32_t    xfs_dir2_dataptr_t;
-typedef uint16_t    xfs_dir2_data_off_t;
 
 #define 	XFS_MIN_AG_BLOCKS   64
 // for checking filesystem sanity checking
@@ -25,14 +23,13 @@ typedef uint16_t    xfs_dir2_data_off_t;
     (tsk_getu32(&(fs->endian), ((s)->sb_agcount)) - 1) * \
      tsk_getu32(&(fs->endian), (s)->sb_agblocks) + XFS_MIN_AG_BLOCKS)
 
-#define XFS_DIR3_DATA_ENTSIZE(n)                    \
-    round_up((offsetof(struct xfs_dir2_data_entry, name[0]) + (n) + \
-         sizeof(xfs_dir2_data_off_t) + sizeof(uint8_t)),    \
-        XFS_DIR2_DATA_ALIGN)
 
-#define __round_mask(x, y) ((__typeof__(x))((y)-1))
-#define round_up(x, y) ((((x)-1) | __round_mask(x, y))+1)
+#define XFS_INODE_CORE_SIZE_VER4 96
+#define XFS_INODE_CORE_SIZE_VER5 176
 
+#define XFS_CONTENT_LEN_V4(fs) (tsk_getu32(&(fs->sb_inodesize))-XFS_INODE_CORE_SIZE_VER4) 
+//#define XFS_CONTENT_LEN_V5(fs) (tsk_getu32(&(fs->sb_inodesize))-XFS_INODE_CORE_SIZE_VER5) 
+#define XFS_CONTENT_LEN_V5 512-176
 /*
  * Minimum and maximum blocksize and sectorsize.
  * The blocksize upper limit is pretty much arbitrary.
@@ -178,6 +175,17 @@ static inline bool xfs_sb_has_incompat_log_feature(
 // crc offset of sb
 #define XFS_SB_CRC_OFF      offsetof(struct xfs_sb, sb_crc)
 
+#define XFS_DIR3_FT_UNKNOWN		0
+#define XFS_DIR3_FT_REG_FILE		1
+#define XFS_DIR3_FT_DIR			2
+#define XFS_DIR3_FT_CHRDEV		3
+#define XFS_DIR3_FT_BLKDEV		4
+#define XFS_DIR3_FT_FIFO		5
+#define XFS_DIR3_FT_SOCK		6
+#define XFS_DIR3_FT_SYMLINK		7
+#define XFS_DIR3_FT_WHT			8
+#define XFS_DIR3_FT_MAX			9
+
 /*
     Superblock - Must be padded to 64 bit alignment.
 */
@@ -315,6 +323,18 @@ typedef xfs_off_t   xfs_dir2_off_t;
 #define XFS_DIR2_DATA_ALIGN_LOG 3       /* i.e., 8 bytes */
 #define XFS_DIR2_DATA_ALIGN (1 << XFS_DIR2_DATA_ALIGN_LOG)
 
+
+
+/*
+ * Convert byte in space to offset in a block
+ */
+static inline xfs_dir2_data_aoff_t
+xfs_dir2_byte_to_off(XFS_INFO *xfs, xfs_dir2_off_t by)
+{
+    TSK_FS_INFO * fs = (TSK_FS_INFO *) &xfs->fs_info;
+    return (xfs_dir2_data_aoff_t)(by & (
+        tsk_getu32(fs->endian, xfs->fs->sb_blocksize) - 1));
+}
 /*
  * Convert dataptr to byte in file space
  */
@@ -323,6 +343,16 @@ xfs_dir2_dataptr_to_byte(xfs_dir2_dataptr_t dp)
 {
     return (xfs_dir2_off_t)dp << XFS_DIR2_DATA_ALIGN_LOG;
 }
+
+/*
+ * Convert dataptr to a byte offset in a block
+ */
+static inline xfs_dir2_data_aoff_t
+xfs_dir2_dataptr_to_off(XFS_INFO *xfs, xfs_dir2_dataptr_t dp)
+{
+    return xfs_dir2_byte_to_off(xfs, xfs_dir2_dataptr_to_byte(dp));
+}
+
 
  // kyu
 typedef enum {
@@ -421,23 +451,6 @@ typedef struct xfs_agi {
 
     /* structure must be padded to 64 bit alignment */
 } xfs_agi_t;
-
-typedef struct{
-
-
-} xfs_extent;
-
-typedef struct{
-
-
-} xfs_inode_dfork;
-
-
-typedef struct{
-
-
-} xfs_inode_core;
-
 
 typedef uint64_t	xfs_ino_t;
 
@@ -582,8 +595,11 @@ typedef struct xfs_bmdr_block {
     Data Extent (raw) - should be extracted before used
 */
 typedef struct xfs_bmbt_rec {
-    uint8_t          l0, l1;
+    uint8_t          l0[8], l1[8];
 } xfs_bmbt_rec_t;
+
+typedef uint64_t	xfs_bmbt_rec_base_t;	/* use this for casts */
+typedef xfs_bmbt_rec_t xfs_bmdr_rec_t;
 
 /*
     Key structure -> Non-leaf level Tree
@@ -1041,6 +1057,16 @@ struct xfs_btree_block {
 #define XFS_DE_MAX             8
 
 
+/*
+ * Values for di_format
+ */
+typedef enum xfs_dinode_fmt {
+	XFS_DINODE_FMT_DEV,		/* xfs_dev_t */
+	XFS_DINODE_FMT_LOCAL,		/* bulk data */
+	XFS_DINODE_FMT_EXTENTS,		/* struct xfs_bmbt_rec */
+	XFS_DINODE_FMT_BTREE,		/* struct xfs_bmdr_block */
+	XFS_DINODE_FMT_UUID		/* added long ago, but never used */
+} xfs_dinode_fmt_t;
 
 /************** JOURNAL ******************/
 
@@ -1177,24 +1203,6 @@ static inline bool xfs_sb_has_incompat_feature(
     //return !tsk_fs_guessu32(sbp->sb_features_incompat & feature, 0);
 }
 
-/*
- * Convert byte in space to offset in a block
- */
-static inline xfs_dir2_data_aoff_t
-xfs_dir2_byte_to_off(XFS_INFO *xfs, xfs_dir2_off_t by)
-{
-    return (xfs_dir2_data_aoff_t)(by & (
-        tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize) - 1));
-}
-
-/*
- * Convert dataptr to a byte offset in a block
- */
-static inline xfs_dir2_data_aoff_t
-xfs_dir2_dataptr_to_off(XFS_INFO *xfs, xfs_dir2_dataptr_t dp)
-{
-    return xfs_dir2_byte_to_off(xfs, xfs_dir2_dataptr_to_byte(dp));
-}
 
 /*
  * Directory tail pointer accessor functions. Based on block geometry.
@@ -1202,18 +1210,114 @@ xfs_dir2_dataptr_to_off(XFS_INFO *xfs, xfs_dir2_dataptr_t dp)
 static inline struct xfs_dir2_block_tail *
 xfs_dir2_block_tail_p(XFS_INFO *xfs, struct xfs_dir2_data_hdr *hdr)
 {
+    TSK_FS_INFO * fs = (TSK_FS_INFO *) &xfs->fs_info;
     return ((struct xfs_dir2_block_tail *)
-        ((char *)hdr + tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize))) - 1;
+        ((char *)hdr + tsk_getu32(fs->endian, xfs->fs->sb_blocksize))) - 1;
 }
-
+// +static inline struct xfs_dir2_block_tail *
+// +xfs_dir2_block_tail_p(struct xfs_fs_info *fs_info, struct xfs_dir2_data_hdr *hdr)
+// +{
+// +    return ((struct xfs_dir2_block_tail *)
+// +	    ((char *)hdr + fs_info->dirblksize)) - 1;
+// +}
 /*
  * Pointer to the leaf entries embedded in a data block (1-block format)
  */
 static inline struct xfs_dir2_leaf_entry *
 xfs_dir2_block_leaf_p(XFS_INFO *xfs, struct xfs_dir2_block_tail *btp)
 {
-    return ((struct xfs_dir2_leaf_entry *)btp) - tsk_getu32(xfs->fs_info.endian, btp->count);
+    TSK_FS_INFO * fs = (TSK_FS_INFO *) &xfs->fs_info;
+    uint32_t count = btp->count;
+    return ((struct xfs_dir2_leaf_entry *)btp) - count;
 }
+
+
+// typedef uint16_t 	xfs_dir2_data_off_
+
+// #define XFS_DIR2_DATA_ENTSIZE(n)					\
+// 	round_up((offsetof(struct xfs_dir2_data_entry, name[0]) + (n) +	\
+// 		 sizeof(xfs_dir2_data_off_t)), XFS_DIR2_DATA_ALIGN)
+
+// #define XFS_DIR3_DATA_ENTSIZE(n)					\
+// 	round_up((offsetof(struct xfs_dir2_data_entry, name[0]) + (n) +	\
+// 		 sizeof(xfs_dir2_data_off_t) + sizeof(uint8_t)),	\
+// 		XFS_DIR2_DATA_ALIGN)
+
+
+static uint8_t
+xfs_dir3_sfe_get_ftype(
+	struct xfs_dir2_sf_entry *sfep)
+{
+    uint8_t	ftype;
+	ftype = sfep->name[sfep->namelen];
+	if (ftype >= XFS_DIR3_FT_MAX)
+		return XFS_DIR3_FT_UNKNOWN;
+	return ftype;
+}
+
+static inline 
+TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
+    fprintf(stderr, "xfs_inode_get_offset called. inode num : %d\n", a_addr);
+
+    TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
+    TSK_OFF_T offset_block;
+    TSK_OFF_T offset;
+    uint8_t sb_agblklog = xfs->fs->sb_agblklog;
+    uint8_t sb_inopblog = xfs->fs->sb_inopblog;
+
+    /* lock access to grp_buf */
+    tsk_take_lock(&xfs->lock);
+    //fprintf(stderr, "after lock\n");
+
+    uint32_t ag_num = a_addr >> (sb_agblklog + sb_inopblog);
+    uint32_t blk_num = (a_addr - (ag_num << (sb_agblklog + sb_inopblog))) >> sb_inopblog;
+    uint32_t sec_num = ( a_addr - (ag_num << (sb_agblklog + sb_inopblog)) 
+                    - (blk_num << sb_inopblog) );
+
+    // fprintf(stderr, "inode num : %d\n", a_addr);
+    // fprintf(stderr, "AG num    : %d\n", ag_num);
+    // fprintf(stderr, "Blk num   : %d\n", blk_num);
+    // fprintf(stderr, "Sec num   : %d\n", sec_num);
+
+    tsk_release_lock(&xfs->lock);
+    //fprintf(stderr, "after unlock\n");
+
+    // sb_agblocks = ag size
+    TSK_OFF_T ag_offset = ag_num * (tsk_getu32(fs->endian, xfs->fs->sb_agblocks) * tsk_getu32(fs->endian, xfs->fs->sb_blocksize));
+    
+    //fprintf(stderr, "after 1\n");
+    TSK_OFF_T blk_offset = blk_num * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
+    
+    //fprintf(stderr, "after 2\n");
+    TSK_OFF_T sec_offset = sec_num * tsk_getu16(fs->endian, xfs->fs->sb_sectsize);
+    
+    //fprintf(stderr, "after 3\n");
+    offset = ag_offset + blk_offset + sec_offset;
+    //offset_block = ag_offset + blk_offset + sec_offset;  
+    //offset = offset_block * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
+    return offset;
+}
+
+
+// typedef struct xfs_bmbt_rec {
+//     uint8_t          l0[8], l1[8];
+// } xfs_bmbt_rec_t;
+/*
+static inline 
+TSK_OFF_T xfs_extent_get_offset(XFS_INFO * xfs, struct xfs_bmbt_rec){
+    fprintf(stderr, "xfs_inode_get_offset called. inode num : %d\n", a_addr);
+
+    TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
+
+    uint128_t extent = tsk_getu64(fs->endian, xfs_bmbt_rec.10) << 64 +
+                     tsk_getu64(fs->endian, xfs_bmbt_rec.11) ;
+
+    fprintf(stederr, "extent : %ld", extent);`
+    TSK_OFF_t offset;
+    
+    return offset;
+}
+*/
 
 
 #endif
