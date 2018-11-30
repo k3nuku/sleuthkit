@@ -27,9 +27,9 @@ typedef uint32_t    xfs_dir2_dataptr_t;
 #define XFS_INODE_CORE_SIZE_VER4 96
 #define XFS_INODE_CORE_SIZE_VER5 176
 
-#define XFS_CONTENT_LEN_V4(fs) (tsk_getu32(&(fs->sb_inodesize))-XFS_INODE_CORE_SIZE_VER4) 
-//#define XFS_CONTENT_LEN_V5(fs) (tsk_getu32(&(fs->sb_inodesize))-XFS_INODE_CORE_SIZE_VER5) 
-#define XFS_CONTENT_LEN_V5 512-176
+#define XFS_CONTENT_LEN_V4(xfs) (tsk_getu16((xfs)->fs_info.endian, (xfs)->fs->sb_inodesize) - XFS_INODE_CORE_SIZE_VER4)
+#define XFS_CONTENT_LEN_V5(xfs) (tsk_getu16((xfs)->fs_info.endian, (xfs)->fs->sb_inodesize) - XFS_INODE_CORE_SIZE_VER5)
+
 /*
  * Minimum and maximum blocksize and sectorsize.
  * The blocksize upper limit is pretty much arbitrary.

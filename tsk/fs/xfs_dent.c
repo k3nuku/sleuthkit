@@ -93,148 +93,161 @@ xfs_dent_copy(XFS_INFO * xfs,
     return 0;
 }
 
-static TSK_RETVAL_ENUM
-xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
-    uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
-{
-    xfs_dir2_sf_hdr_t *hdr;
+// static TSK_RETVAL_ENUM
+// xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
+//     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
+// {
+//     xfs_dir2_sf_hdr_t *hdr;
 
-    uint64_t bit64_count = 0;
-    uint32_t bit32_count = 0;
+//     uint64_t bit64_count = 0;
+//     uint32_t bit32_count = 0;
     
-    TSK_INUM_T parent;
+//     TSK_INUM_T parent;
 
-    char* filename;
-    uint16_t eoffset;
-    uint8_t namelen;
-    uint8_t filetype;
-    TSK_INUM_T inumdata;
+//     char* filename;
+//     uint16_t eoffset;
+//     uint8_t namelen;
+//     uint8_t filetype;
+//     TSK_INUM_T inumdata;
 
-    hdr = (xfs_dir2_sf_hdr_t*)offset;
+//     hdr = (xfs_dir2_sf_hdr_t*)offset;
     
-    // sf header 파싱 -> count, parent 저장
-    parent = tsk_getu64(xfs->fs_info.endian, hdr->parent);
+//     // sf header 파싱 -> count, parent 저장
+//     parent = tsk_getu64(xfs->fs_info.endian, hdr->parent);
 
-    if (hdr->i8count > 0)
-        bit64_count = tsk_getu64(xfs->fs_info.endian, hdr->parent);
-    else
-        bit32_count = hdr->count;
+//     if (hdr->i8count > 0)
+//         bit64_count = tsk_getu64(xfs->fs_info.endian, hdr->parent);
+//     else
+//         bit32_count = hdr->count;
 
-    offset += sizeof(xfs_dir2_sf_hdr_t); // +80
+//     offset += sizeof(xfs_dir2_sf_hdr_t); // +80
 
-    // 이제 sf_entry_t로 해석
-    for (int i = 0; i < (bit64_count > 0 ? bit64_count : bit32_count); i++)
-    {
-        xfs_dir2_sf_entry_t *entry = (xfs_dir2_sf_entry_t*)offset;
+//     // 이제 sf_entry_t로 해석
+//     for (int i = 0; i < (bit64_count > 0 ? bit64_count : bit32_count); i++)
+//     {
+//         xfs_dir2_sf_entry_t *entry = (xfs_dir2_sf_entry_t*)offset;
 
-        namelen = entry->namelen;
-        eoffset = tsk_getu16(xfs->fs_info.endian, entry->offset);
-        filename = entry->name;
-        filetype = xfs_dir3_sfe_get_ftype(entry);
-        inumdata = xfs_dir3_sfe_get_ino(hdr, entry);
+//         namelen = entry->namelen;
+//         eoffset = tsk_getu16(xfs->fs_info.endian, entry->offset);
+//         filename = entry->name;
+//         filetype = xfs_dir3_sfe_get_ftype(entry);
+//         inumdata = xfs_dir3_sfe_get_ino(hdr, entry);
 
-        tsk_fprintf(stderr, "[%lu] name: %s | type: %d | inode: %d | atoffset: 0x%lu\n",
-            filename, filetype, inumdata, offset);
+//         tsk_fprintf(stderr, "[%lu] name: %s | type: %d | inode: %d | atoffset: 0x%lu\n",
+//             filename, filetype, inumdata, offset);
 
-        offset += sizeof(xfs_dir2_sf_entry_t) 
-                    + namelen * sizeof(char)
-                    + sizeof(TSK_INUM_T);
-    }
+//         offset += sizeof(xfs_dir2_sf_entry_t) 
+//                     + namelen * sizeof(char)
+//                     + sizeof(TSK_INUM_T);
+//     }
 
-    return TSK_OK;
-}
+//     return TSK_OK;
+// }
+
+// static TSK_RETVAL_ENUM
+// xfs_dent_parse_btree(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
+//     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
+// {
+//     // while nextents, nblocks
+//     //  di_bmx에서 n = offset, block, blockcount / 2n = leafoffset, block, blockcount
+//     //  while true
+//     //   if block[n.offset].magic == dir2_data_magic
+//     //    data_free_t*n개 지나기 (data_unused_t의 length, offset++)
+//     //    continue
+//     //   offset => dir2_data_entry_t
+//     //   break
+//     //  while nextents, nblocks
+//     //   dir2_data_entry_t 파싱 -> inumber, namelen, name, tag
+//     //  ~~이런식
+//     offset += 0; // 여기서 취해줄 수 있는게 없음
+// }
+
+
+//  * @param a_is_del Set to 1 if block is from a deleted directory
+//  * a_fs_dir = 채워야 할 것, 나머지는 채워져 있는 것
+//  * parse_block = 최종목표: a_fs_dir 채우기
+//  * inode format = local -> shortform
+//  *              = block -> block
+//  *                      or leaf
+ 
+// static TSK_RETVAL_ENUM
+// xfs_dent_parse_block(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
+//     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
+// {
+//     // while valid at current offset is bmbt_rec
+//     //  bmbt_rec[n] 파싱 -> offset, block, blockcount 저장
+//     // offset 이동
+
+//     // TSK_FS_INFO *fs = &(xfs->fs_info);
+//     // TSK_FS_NAME *fs_name;
+
+//     // xfs_dir2_data_hdr_t *hdr;
+//     // xfs_dir2_data_entry_t *dep;
+//     // xfs_dir2_data_unused_t *dup;
+//     // xfs_dir2_block_tail_t *btp;
+
+//     // char *ptr; // current data entry
+//     // char *endptr; // end of data entry
+
+//     // int wantoff;
+//     // xfs_off_t cook;
+
+//     // int error;
+
+//     // // dir3
+//     // //error = xfs_dir3_block_read();
+//     // if (error)
+//     //     return error;
+
+//     // // extract the byte offset
+//     // //wantoff = xfs_dir2_dataptr_to_off(xfs, );
+//     // //hdr = bp->b_addr; // b_addr == 가상 버퍼
+//     // // we can skip check whether it is corrupted, we can recover it
+
+//     // // dir2
+//     // btp = xfs_dir2_block_tail_p(xfs, hdr);
+//     // ptr = (char *)xfs_dir3_data_entry_p(hdr);
+//     // endptr = xfs_dir2_block_leaf_p(xfs, btp);
+
+//     // while (ptr < endptr) {
+//     //     uint8_t filetype;
+
+//     //     dup = (xfs_dir2_data_unused_t *)ptr;
+
+//     //     // to next iteration
+//     //     ptr += xfs_dir3_data_entsize(dep->namelen);
+
+//     //     // entry is before the desired starting point then skip it.
+//     //     if ((char *)dep - (char *)hdr < wantoff)
+//     //         continue;
+
+//     //     cook = xfs_dir2_db_to_dataptr(xfs, (char*)dep - (char*)hdr); // calc entry pointer
+//     //     filetype = xfs_dir3_data_get_ftype(dep);
+
+//     //     // read name, namelen, inumber, filetype and copy to fs_dir
+//     //     if (xfs_dent_copy(xfs, cook, fs_name)) {
+//     //         tsk_fs_name_free(fs_name);
+//     //         return TSK_ERR;
+//     //     }
+
+//     //     if (tsk_fs_dir_add(a_fs_dir, fs_name)) { // add filled fs_name to fs_dir
+//     //         tsk_fs_name_free(fs_name);
+//     //         return TSK_ERR;
+//     //     }
+//     // }
+
+//     return TSK_OK;
+// } deprecated
 
 static TSK_RETVAL_ENUM
-xfs_dent_parse_btree(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
+xfs_dent_parse(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
-    // while nextents, nblocks
-    //  di_bmx에서 n = offset, block, blockcount / 2n = leafoffset, block, blockcount
-    //  while true
-    //   if block[n.offset].magic == dir2_data_magic
-    //    data_free_t*n개 지나기 (data_unused_t의 length, offset++)
-    //    continue
-    //   offset => dir2_data_entry_t
-    //   break
-    //  while nextents, nblocks
-    //   dir2_data_entry_t 파싱 -> inumber, namelen, name, tag
-    //  ~~이런식
-    offset += 0; // 여기서 취해줄 수 있는게 없음
-}
+    // do parse about directory entries
+    fprintf(stderr, "xfs_dent_parse: called\n");
 
-/*
- * @param a_is_del Set to 1 if block is from a deleted directory
- * a_fs_dir = 채워야 할 것, 나머지는 채워져 있는 것
- * parse_block = 최종목표: a_fs_dir 채우기
- * inode format = local -> shortform
- *              = block -> block
- *                      or leaf
- */
-static TSK_RETVAL_ENUM
-xfs_dent_parse_block(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
-    uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
-{
-    // while valid at current offset is bmbt_rec
-    //  bmbt_rec[n] 파싱 -> offset, block, blockcount 저장
-    // offset 이동
 
-    // TSK_FS_INFO *fs = &(xfs->fs_info);
-    // TSK_FS_NAME *fs_name;
-
-    // xfs_dir2_data_hdr_t *hdr;
-    // xfs_dir2_data_entry_t *dep;
-    // xfs_dir2_data_unused_t *dup;
-    // xfs_dir2_block_tail_t *btp;
-
-    // char *ptr; // current data entry
-    // char *endptr; // end of data entry
-
-    // int wantoff;
-    // xfs_off_t cook;
-
-    // int error;
-
-    // // dir3
-    // //error = xfs_dir3_block_read();
-    // if (error)
-    //     return error;
-
-    // // extract the byte offset
-    // //wantoff = xfs_dir2_dataptr_to_off(xfs, );
-    // //hdr = bp->b_addr; // b_addr == 가상 버퍼
-    // // we can skip check whether it is corrupted, we can recover it
-
-    // // dir2
-    // btp = xfs_dir2_block_tail_p(xfs, hdr);
-    // ptr = (char *)xfs_dir3_data_entry_p(hdr);
-    // endptr = xfs_dir2_block_leaf_p(xfs, btp);
-
-    // while (ptr < endptr) {
-    //     uint8_t filetype;
-
-    //     dup = (xfs_dir2_data_unused_t *)ptr;
-
-    //     // to next iteration
-    //     ptr += xfs_dir3_data_entsize(dep->namelen);
-
-    //     // entry is before the desired starting point then skip it.
-    //     if ((char *)dep - (char *)hdr < wantoff)
-    //         continue;
-
-    //     cook = xfs_dir2_db_to_dataptr(xfs, (char*)dep - (char*)hdr); // calc entry pointer
-    //     filetype = xfs_dir3_data_get_ftype(dep);
-
-    //     // read name, namelen, inumber, filetype and copy to fs_dir
-    //     if (xfs_dent_copy(xfs, cook, fs_name)) {
-    //         tsk_fs_name_free(fs_name);
-    //         return TSK_ERR;
-    //     }
-
-    //     if (tsk_fs_dir_add(a_fs_dir, fs_name)) { // add filled fs_name to fs_dir
-    //         tsk_fs_name_free(fs_name);
-    //         return TSK_ERR;
-    //     }
-    // }
+    fprintf(stderr, "xfs_dent_parse: passed\n");
 
     return TSK_OK;
 }
@@ -304,12 +317,13 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     }
 
     // handle the orphan directory if its contents were requested
-    if (a_addr == TSK_FS_ORPHANDIR_INUM(a_fs)) {
-        return tsk_fs_dir_find_orphans(a_fs, fs_dir);
-    }
+    // if (a_addr == TSK_FS_ORPHANDIR_INUM(a_fs)) {
+    //     return tsk_fs_dir_find_orphans(a_fs, fs_dir);
+    // }
 
     if ((fs_dir->fs_file =
-        tsk_fs_file_open_meta(a_fs, NULL, a_addr)) == NULL) { // add_meta 함수 구현해줘야 함
+        tsk_fs_file_open_meta(a_fs, NULL, a_addr)) == NULL) { // inode_lookup -> content_ptr 채움
+        fprintf(stderr, "xfs_fs_dir_open_meta: failed to obtain fs_file meta info\n");
         tsk_error_errstr2_concat("- xfs_dir_open_meta");
         return TSK_COR;
     }
@@ -319,57 +333,41 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
         return TSK_ERR;
     }
 
-    size = sizeof(xfs_dinode); // 메타데이터 사이즈(토탈)를 가져옴
-    fprintf(stderr, "metasize: %d\n", size);
+    size = roundup(fs_dir->fs_file->meta->size, a_fs->block_size);
     TSK_OFF_T offset = 0;
-    offset = xfs_inode_get_offset(xfs, a_addr); // 잠그만자고구현점ㅎ...
-    
-    // get bytes from offset
-    ssize_t len = (a_fs->block_size < size) ? a_fs->block_size : size;
-    ssize_t resread = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
 
-    fprintf(stderr, "fs_dir->fs_file: %p\n", fs_dir->fs_file);
-    fprintf(stderr, "len: %d, read: %d\n", len, resread);
+    fprintf(stderr, "metasize: %d\n", fs_dir->fs_file->meta->size);
 
-    xfs_dinode* inode = (xfs_dinode *)dirbuf;
-    offset += sizeof(xfs_dinode) + 4; // skip di_core + di_next_unlinked, 오프셋 반복 바로 전까지 옮기기
+    while (size > 0) {
+        ssize_t len = (a_fs->block_size < size) ? a_fs->block_size : size;
+        ssize_t cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
+        
+        if (cnt != len) {
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_FWALK);
+            tsk_error_set_errstr
+            ("xfs_dir_open_meta: Error reading directory contents: %"
+                PRIuINUM "\n", a_addr);
+            free(dirbuf);
+            return TSK_COR;
+        }
 
-    switch (inode->di_format)
-    {
-        case XFS_DINODE_FMT_LOCAL: // shortform 반복
-            retval_tmp = 
-                xfs_dent_parse_shortform(xfs, fs_dir,
-                (fs_dir->fs_file->meta->
-                    flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
-                dirbuf, offset);
+        retval_tmp =
+            xfs_dent_parse(xfs, fs_dir,
+            (fs_dir->fs_file->meta->
+                flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
+            dirbuf, len);
+
+        if (retval_tmp == TSK_ERR) {
+            retval_final = TSK_ERR;
             break;
+        }
+        else if (retval_tmp == TSK_COR) {
+            retval_final = TSK_COR;
+        }
 
-        case XFS_DINODE_FMT_EXTENTS: // block 반복
-            retval_tmp = 
-                xfs_dent_parse_block(xfs, fs_dir,
-                (fs_dir->fs_file->meta->
-                    flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
-                dirbuf, offset);
-            break;
-
-        case XFS_DINODE_FMT_BTREE: // btree 반복
-            retval_tmp =
-                xfs_dent_parse_btree(xfs, fs_dir,
-                (fs_dir->fs_file->meta->
-                    flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
-                dirbuf, offset);
-            break;
-
-        default:
-            tsk_fprintf(stderr, "xfs_dir_open_meta: unknown di_format\n");
-            break;
-    }
-
-    if (retval_tmp == TSK_ERR) {
-        retval_final = TSK_ERR;
-    }
-    else if (retval_tmp == TSK_COR) {
-        retval_final = TSK_COR;
+        size -= len;
+        offset += len;
     }
 
     free(dirbuf);

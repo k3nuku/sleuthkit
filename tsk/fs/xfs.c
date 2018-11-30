@@ -289,19 +289,6 @@ xfs_load_attrs_extents(TSK_FS_FILE *fs_file)
     return 0;
 }
 
-/** \internal
- * Add the data runs and extents to the file attributes.
- *
- * @param fs_file File system to analyze
- * @returns 0 on success, 1 otherwise
- */
-static uint8_t
-xfs_load_attrs(TSK_FS_FILE * fs_file)
-{
-    return -1;
-}
-
-
 static uint8_t
 xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
     xfs_dinode * dino_buf)
@@ -334,7 +321,7 @@ xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
 
     uint8_t sb_agblklog = xfs->fs->sb_agblklog;
     uint8_t sb_inopblog = xfs->fs->sb_inopblog;
-    fprintf(stderr, "agblklog : %d, inopblocklog :%d\n", sb_agblklog, sb_inopblog);
+    //fprintf(stderr, "agblklog : %d, inopblocklog :%d\n", sb_agblklog, sb_inopblog);
 
     /* lock access to grp_buf */
     tsk_take_lock(&xfs->lock);
@@ -360,7 +347,7 @@ xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
     addr = xfs_inode_get_offset(xfs, dino_inum);  
 
     //fprintf(stderr, "calculated offset1  : %d\n", addr);
-    fprintf(stderr, "calculated offset  : %d\n", xfs_inode_get_offset(xfs, dino_inum));
+    //fprintf(stderr, "calculated offset  : %d\n", xfs_inode_get_offset(xfs, dino_inum));
 
     cnt = tsk_fs_read(fs, addr, (char *) dino_buf, xfs->inode_size);
     
@@ -516,14 +503,15 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
          fs_meta->link = NULL;
     }
 
-    if (fs_meta->content_len != XFS_CONTENT_LEN_V5) {
-         fprintf(stderr, "xfs.c:514 content_len is not XFS_CONTENT_LEN_V5  : %d\n", fs_meta->content_len);
+    if (fs_meta->content_len != XFS_CONTENT_LEN_V5(xfs)) {
+         fprintf(stderr, "xfs.c:514 content_len is not XFS_CONTENT_LEN_V5  : %zu\n", fs_meta->content_len);
          if ((fs_meta =
                  tsk_fs_meta_realloc(fs_meta,
-                     XFS_CONTENT_LEN_V5)) == NULL) {
+                     XFS_CONTENT_LEN_V5(xfs))) == NULL) {
              return 1;
          }
     }
+    else fprintf(stderr, "content_len: %d, line: %d\n", fs_meta->content_len, __LINE__);
     
     // content_ptr에 data fork 영역 할당
     // inode core 이후의 content 영역을 format에 맞게 content ptr에 복사해야함
@@ -543,121 +531,6 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     fs_meta->content_ptr = offset + sizeof(xfs_dinode);
     fprintf(stderr, "ino : %d  |  content_ptr : %lx\n", inum, (TSK_OFF_T) fs_meta->content_ptr);
   
-    //     if ((fs_meta->type == TSK_FS_META_TYPE_LNK)
-    //         && (fs_meta->size < EXT2FS_MAXPATHLEN) && (fs_meta->size >= 0)) {
-    //         int i;
-
-    //         if ((fs_meta->link =
-    //                 tsk_malloc((size_t) (fs_meta->size + 1))) == NULL)
-    //             return 1;
-
-    //         /* it is located directly in the pointers */
-    //         if (fs_meta->size < 4 * (EXT2FS_NDADDR + EXT2FS_NIADDR)) {
-    //             unsigned int j;
-    //             unsigned int count = 0;
-
-    //             for (i = 0; i < (EXT2FS_NDADDR + EXT2FS_NIADDR) &&
-    //                 count < fs_meta->size; i++) {
-    //                 char *a_ptr = (char *) &dino_buf->i_block[i];
-    //                 for (j = 0; j < 4 && count < fs_meta->size; j++) {
-    //                     fs_meta->link[count++] = a_ptr[j];
-    //                 }
-    //             }
-    //             fs_meta->link[count] = '\0';
-
-    //             /* clear the content pointer data to avoid the prog from reading them */
-    //             memset(fs_meta->content_ptr, 0, fs_meta->content_len);
-    //         }
-
-    //         /* it is in blocks */
-    //         else {
-    //             TSK_FS_INFO *fs = (TSK_FS_INFO *) & ext2fs->fs_info;
-    //             char *data_buf = NULL;
-    //             char *a_ptr = fs_meta->link;
-    //             unsigned int total_read = 0;
-    //             TSK_DADDR_T *addr_ptr = fs_meta->content_ptr;;
-
-    //             if ((data_buf = tsk_malloc(fs->block_size)) == NULL) {
-    //                 return 1;
-    //             }
-
-    //             /* we only need to do the direct blocks due to the limit
-    //              * on path length */
-    //             for (i = 0; i < EXT2FS_NDADDR && total_read < fs_meta->size;
-    //                 i++) {
-    //                 ssize_t cnt;
-
-    //                 cnt = tsk_fs_read_block(fs,
-    //                     addr_ptr[i], data_buf, fs->block_size);
-
-    //                 if (cnt != fs->block_size) {
-    //                     if (cnt >= 0) {
-    //                         tsk_error_reset();
-    //                         tsk_error_set_errno(TSK_ERR_FS_READ);
-    //                     }
-    //                     tsk_error_set_errstr2
-    //                         ("ext2fs_dinode_copy: symlink destination from %"
-    //                         PRIuDADDR, addr_ptr[i]);
-    //                     free(data_buf);
-    //                     return 1;
-    //                 }
-
-    //                 int copy_len =
-    //                     (fs_meta->size - total_read <
-    //                     fs->block_size) ? (int) (fs_meta->size -
-    //                     total_read) : (int) (fs->block_size);
-
-    //                 memcpy(a_ptr, data_buf, copy_len);
-    //                 total_read += copy_len;
-    //                 a_ptr = (char *) ((uintptr_t) a_ptr + copy_len);
-    //             }
-
-    //             /* terminate the string */
-    //             *a_ptr = '\0';
-    //             free(data_buf);
-    //         }
-
-    //         /* Clean up name */
-    //         i = 0;
-    //         while (fs_meta->link[i] != '\0') {
-    //             if (TSK_IS_CNTRL(fs_meta->link[i]))
-    //                 fs_meta->link[i] = '^';
-    //             i++;
-    //         }
-    //     }
-    // }
-
-    // /* Fill in the flags value */
-    // grp_num = (EXT2_GRPNUM_T) ((inum - fs->first_inum) /
-    //     tsk_getu32(fs->endian, ext2fs->fs->s_inodes_per_group));
-
-
-    // tsk_take_lock(&ext2fs->lock);
-
-    // if (ext2fs_imap_load(ext2fs, grp_num)) {
-    //     tsk_release_lock(&ext2fs->lock);
-    //     return 1;
-    // }
-
-    // ibase =
-    //     grp_num * tsk_getu32(fs->endian,
-    //     ext2fs->fs->s_inodes_per_group) + fs->first_inum;
-
-    // /*
-    //  * Apply the allocated/unallocated restriction.
-    //  */
-    // fs_meta->flags = (isset(ext2fs->imap_buf, inum - ibase) ?
-    //     TSK_FS_META_FLAG_ALLOC : TSK_FS_META_FLAG_UNALLOC);
-
-    // tsk_release_lock(&ext2fs->lock);
-
-
-    // /*
-    //  * Apply the used/unused restriction.
-    //  */
-    // fs_meta->flags |= (fs_meta->ctime ?
-    //     TSK_FS_META_FLAG_USED : TSK_FS_META_FLAG_UNUSED);
-
     return 0;
 }    
 
@@ -665,67 +538,65 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
 uint8_t xfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum, TSK_INUM_T end_inum,
     TSK_FS_META_FLAG_ENUM flags, TSK_FS_META_WALK_CB a_action, void *a_ptr)
 {
-    char *myname = "xfs_inode_walk";
-    XFS_INFO * xfs = (XFS_INFO *) fs;
-    TSK_INUM_T inum;
-    TSK_INUM_T end_inum_tmp;
-    TSK_FS_FILE * fs_file;
-    unsigned int myflags;
+    // char *myname = "xfs_inode_walk";
+    // XFS_INFO * xfs = (XFS_INFO *) fs;
+    // TSK_INUM_T inum;
+    // TSK_INUM_T end_inum_tmp;
+    // TSK_FS_FILE * fs_file;
+    // unsigned int myflags;
 
-    tsk_error_reset();
+    // tsk_error_reset();
 
-    if(start_inum < fs->first_inum || start_inum > fs->last_inum){
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
-        tsk_error_set_errstr("%s: start inode: %s" PRIuINUM "", myname, start_inum);
-        return 1;
-    }
-    if(end_inum < fs->first_inum || end_inum > fs->last_inum || end_inum < start_inum){
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
-        tsk_error_set_errstr("%s: end inode: %s" PRIuINUM "", myname, end_inum);
-        return 1;
-    }
-    if (flags & TSK_FS_META_FLAG_ORPHAN) {
-        flags |= TSK_FS_META_FLAG_UNALLOC;
-        flags &= ~TSK_FS_META_FLAG_ALLOC;
-        flags |= TSK_FS_META_FLAG_USED;
-        flags &= ~TSK_FS_META_FLAG_UNUSED;
-    }
-    else {
-        if (((flags & TSK_FS_META_FLAG_ALLOC) == 0) &&
-            ((flags & TSK_FS_META_FLAG_UNALLOC) == 0)) {
-            flags |= (TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC);
-        }
+    // if(start_inum < fs->first_inum || start_inum > fs->last_inum){
+    //     tsk_error_reset();
+    //     tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+    //     tsk_error_set_errstr("%s: start inode: %s" PRIuINUM "", myname, start_inum);
+    //     return 1;
+    // }
+    // if(end_inum < fs->first_inum || end_inum > fs->last_inum || end_inum < start_inum){
+    //     tsk_error_reset();
+    //     tsk_error_set_errno(TSK_ERR_FS_WALK_RNG);
+    //     tsk_error_set_errstr("%s: end inode: %s" PRIuINUM "", myname, end_inum);
+    //     return 1;
+    // }
+    // if (flags & TSK_FS_META_FLAG_ORPHAN) {
+    //     flags |= TSK_FS_META_FLAG_UNALLOC;
+    //     flags &= ~TSK_FS_META_FLAG_ALLOC;
+    //     flags |= TSK_FS_META_FLAG_USED;
+    //     flags &= ~TSK_FS_META_FLAG_UNUSED;
+    // }
+    // else {
+    //     if (((flags & TSK_FS_META_FLAG_ALLOC) == 0) &&
+    //         ((flags & TSK_FS_META_FLAG_UNALLOC) == 0)) {
+    //         flags |= (TSK_FS_META_FLAG_ALLOC | TSK_FS_META_FLAG_UNALLOC);
+    //     }
 
-        /* If neither of the USED or UNUSED flags are set, then set them
-         * both
-         */
-        if (((flags & TSK_FS_META_FLAG_USED) == 0) &&
-            ((flags & TSK_FS_META_FLAG_UNUSED) == 0)) {
-            flags |= (TSK_FS_META_FLAG_USED | TSK_FS_META_FLAG_UNUSED);
-        }
-    }
-    /* If we are looking for orphan files and have not yet filled
-     * in the list of unalloc inodes that are pointed to, then fill
-     * in the list
-     */
-    if ((flags & TSK_FS_META_FLAG_ORPHAN)) {
-        if (tsk_fs_dir_load_inum_named(fs) != TSK_OK) {
-            tsk_error_errstr2_concat
-                ("- ext2fs_inode_walk: identifying inodes allocated by file names");
-            return 1;
-        }
-    }
+    //     /* If neither of the USED or UNUSED flags are set, then set them
+    //      * both
+    //      */
+    //     if (((flags & TSK_FS_META_FLAG_USED) == 0) &&
+    //         ((flags & TSK_FS_META_FLAG_UNUSED) == 0)) {
+    //         flags |= (TSK_FS_META_FLAG_USED | TSK_FS_META_FLAG_UNUSED);
+    //     }
+    // }
+    // /* If we are looking for orphan files and have not yet filled
+    //  * in the list of unalloc inodes that are pointed to, then fill
+    //  * in the list
+    //  */
+    // if ((flags & TSK_FS_META_FLAG_ORPHAN)) {
+    //     if (tsk_fs_dir_load_inum_named(fs) != TSK_OK) {
+    //         tsk_error_errstr2_concat
+    //             ("- ext2fs_inode_walk: identifying inodes allocated by file names");
+    //         return 1;
+    //     }
+    // }
     
-    if ((fs_file = tsk_fs_file_alloc(fs)) == NULL)
-        return 1;
-    //if ((fs_file->meta =
-            //tsk_fs_meta_alloc( )) == NULL)
-    //    return 1;
+    // if ((fs_file = tsk_fs_file_alloc(fs)) == NULL)
+    //     return 1;
+    // //if ((fs_file->meta =
+    //         //tsk_fs_meta_alloc( )) == NULL)
+    // //    return 1;
 
-
-    
     return -1;
 }
 
@@ -744,13 +615,18 @@ TSK_FS_BLOCK_FLAG_ENUM xfs_block_getflags(TSK_FS_INFO * a_fs, TSK_DADDR_T a_addr
     return flags;
 }
 
-/*
+
 //load_attrs
-uint8_t xfs_load_attrs(TSK_FS_FILE * fs)
+uint8_t xfs_load_attrs(TSK_FS_FILE * fs_file)
 {
+    TSK_FS_META *fs_meta = fs_file->meta;
+    XFS_INFO *xfs_info = (XFS_INFO*)fs_file->fs_info;
+
+    fprintf(stderr, "xfs_info: inode_size: %d\n", xfs_info->inode_size);
+
     return -1;
 }
-*/
+
 
 static uint8_t 
 xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
@@ -763,21 +639,21 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
 
     if (a_fs_file == NULL) {
         tsk_error_set_errno(TSK_ERR_FS_ARG);
-        tsk_error_set_errstr("ext2fs_inode_lookup: fs_file is NULL");
+        tsk_error_set_errstr("xfs_inode_lookup: fs_file is NULL");
         return 1;
     }
-    fprintf(stderr, "here1\n");
+    
     if (a_fs_file->meta == NULL) {
         //uint64_t content_len;
         //xfs->fs->             
         if ((a_fs_file->meta =      
-                tsk_fs_meta_alloc(XFS_CONTENT_LEN_V5)) == NULL) // #define XFS_CONTENT_LEN 
+                tsk_fs_meta_alloc(XFS_CONTENT_LEN_V5(xfs))) == NULL) // #define XFS_CONTENT_LEN 
             return 1;
     }
     else {
         tsk_fs_meta_reset(a_fs_file->meta);
     }
-    fprintf(stderr, "here2\n");
+    
     // see if they are looking for the special "orphans" directory
     if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
         if (tsk_fs_dir_make_orphan_dir_meta(fs, a_fs_file->meta))
@@ -789,17 +665,17 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
     size =
         xfs->inode_size > 
         sizeof(xfs_dinode) ? xfs->inode_size : sizeof(xfs_dinode);
-    fprintf(stderr, "size of inode : %d\n", size);
-    if((dino_buf = (xfs_dinode *)tsk_malloc(size)) == NULL){
+
+    if ((dino_buf = (xfs_dinode *)tsk_malloc(size)) == NULL) {
         return 1;
     }
-    fprintf(stderr, "here3\n");
+    
     // dinode -> 
-    if(xfs_dinode_load(xfs, inum, dino_buf)){
+    if (xfs_dinode_load(xfs, inum, dino_buf)) {
         free(dino_buf);
         return 1;
     }
-    if(xfs_dinode_copy(xfs, a_fs_file->meta, inum, dino_buf)){
+    if (xfs_dinode_copy(xfs, a_fs_file->meta, inum, dino_buf)) {
         free(dino_buf);
         return 1;
     }
