@@ -938,6 +938,23 @@ typedef struct xfs_attr_shortform {
     } list[1];          /* variable sized array */
 } xfs_attr_shortform_t;
 
+
+typedef union {
+    uint8_t i8[8];
+    uint8_t i4[4];
+} xfs_dir2_inou_t;
+
+typedef struct xfs_dir2_sf_hdr {
+    uint8_t count;
+    uint8_t i8count;
+    xfs_dir2_inou_t parent;
+} xfs_dir2_sf_hdr_t;
+
+typedef struct xfs_dir2_sf {
+    xfs_dir2_sf_hdr_t hdr;
+    xfs_dir2_sf_entry_t list[1];
+} xfs_dir2_sf_t;
+
 // Btree block format
 /* short form block header */
 struct xfs_btree_block_shdr {
@@ -1300,35 +1317,51 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
 }
 
 
-// typedef struct xfs_bmbt_irec {
-//     uint64_t        br_startoff;
-//     uint32_t 	    br_startblock;
-//     uint64_t        br_blockcount;
-//     // xfs_exntst_t     br_state;
-// } xfs_bmbt_irec_t;
+typedef struct xfs_bmbt_irec {
+    uint64_t        br_startoff;
+    uint32_t 	    br_startblock;
+    uint64_t        br_blockcount;
+    // xfs_exntst_t     br_state;
+} xfs_bmbt_irec_t;
 
-// typedef struct xfs_bmbt_rec
-// {
-// 	uint8_t			l0[8], l1[8];
-// } xfs_bmbt_rec_t;
+typedef struct xfs_bmbt_rec
+{
+	uint8_t			fw[8], bw[8];
+} xfs_bmbt_rec_t;
 
-// static inline 
-// struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t bmbt_rec){
-//     fprintf(stderr, "xfs_extent_get_offset called.\n");
+static inline 
+struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t * bmbt_rec){
+    fprintf(stderr, "xfs_extent_get_offset called.\n");
 
-//     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
-//     xfs_bmbt_irec_t rec;
+    TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
 
-//     uint64_t br_start_off = tsk_getu64(fs->endian, &bmbt_rec.10) & (uint64_t)0x7fffffffffffffff; 
+    // for(int i = 0 ; i < 16; i++){
+    //     if (i < 8)
+    //         fprintf(stderr, "%2u ", bmbt_rec->fw[i]);
+    //     else
+    //         fprintf(stderr, "%2u ", bmbt_rec->bw[i-8]);
+    // }
+    // fprintf(stderr, "\n");
+    xfs_bmbt_irec_t rec;
+    
 
-//     //  tsk_getu64(fs->endian, xfs_bmbt_rec.10) << 64 +
-//     //                  tsk_getu64(fs->endian, xfs_bmbt_rec.11) ;
+    
+    rec.br_startoff = (tsk_getu64(fs->endian, bmbt_rec->fw) & (uint64_t)0x7fffffffffffffff) >>  9;
+    
+    rec.br_blockcount = (tsk_getu64(fs->endian, bmbt_rec->bw) & (uint64_t)0x1fffff);
+    
+    uint32_t absblock = ((tsk_getu64(fs->endian, bmbt_rec->fw) & (uint64_t)0x1ff) << 43) +
+                        ((tsk_getu64(fs->endian, bmbt_rec->bw) - rec.br_blockcount) >> 21);
+
+    rec.br_startblock = ((absblock >> xfs->fs->sb_agblklog) * tsk_getu32(fs->endian, xfs->fs->sb_agblocks) 
+                        + absblock - (0x1 << xfs->fs->sb_agblklog)) * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
+
+    //fprintf(stderr, "extent : %llx  |  start_off : %lx  |  block num : %lx  | block count : %lx\n", tsk_getu64(fs->endian, bmbt_rec->bw), rec.br_startoff, rec.br_startblock, rec.br_blockcount);
 
 
-//     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
+    return rec;
+}
 
 
-//     return offset;
-// }
 
 #endif
