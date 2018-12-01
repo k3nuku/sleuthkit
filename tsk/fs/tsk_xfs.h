@@ -591,15 +591,8 @@ typedef struct xfs_bmdr_block {
     uint8_t      bb_numrecs[2]; /* current # of data records */
 } xfs_bmdr_block_t;
 
-/*
-    Data Extent (raw) - should be extracted before used
-*/
-typedef struct xfs_bmbt_rec {
-    uint8_t          l0[8], l1[8];
-} xfs_bmbt_rec_t;
-
 typedef uint64_t	xfs_bmbt_rec_base_t;	/* use this for casts */
-typedef xfs_bmbt_rec_t xfs_bmdr_rec_t;
+//typedef xfs_bmbt_rec_t xfs_bmdr_rec_t;
 
 /*
     Key structure -> Non-leaf level Tree
@@ -943,17 +936,6 @@ typedef union {
     uint8_t i8[8];
     uint8_t i4[4];
 } xfs_dir2_inou_t;
-
-typedef struct xfs_dir2_sf_hdr {
-    uint8_t count;
-    uint8_t i8count;
-    xfs_dir2_inou_t parent;
-} xfs_dir2_sf_hdr_t;
-
-typedef struct xfs_dir2_sf {
-    xfs_dir2_sf_hdr_t hdr;
-    xfs_dir2_sf_entry_t list[1];
-} xfs_dir2_sf_t;
 
 // Btree block format
 /* short form block header */
@@ -1362,6 +1344,95 @@ struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t * bmbt
     return rec;
 }
 
+typedef xfs_off_t   xfs_dir2_off_t;
+typedef uint32_t    xfs_dir2_db_t;
+typedef uint        xfs_dir2_data_aoff_t;   /* argument form */
+
+static inline uint16_t get_unaligned_be16(const uint8_t *p)
+{
+    return p[0] << 8 | p[1];
+}
+
+static inline xfs_dir2_data_aoff_t
+xfs_dir2_sf_get_offset(xfs_dir2_sf_entry_t *sfep)
+{
+    return get_unaligned_be16(sfep->offset);
+}
+
+/*
+ * Convert block and offset to byte in space
+ */
+static inline xfs_dir2_off_t
+xfs_dir2_db_off_to_byte(XFS_INFO *xfs, xfs_dir2_db_t db,
+            xfs_dir2_data_aoff_t o)
+{
+    return ((xfs_dir2_off_t)db << xfs->fs->sb_blocklog) + o;
+}
+
+/*
+ * Convert byte in file space to dataptr.  It had better be aligned.
+ */
+static inline xfs_dir2_dataptr_t
+xfs_dir2_byte_to_dataptr(xfs_dir2_off_t by)
+{
+    return (xfs_dir2_dataptr_t)(by >> XFS_DIR2_DATA_ALIGN_LOG);
+}
+
+
+#define XFS_INO32_SIZE	4
+#define XFS_INO64_SIZE	8
+
+/*
+ * Shortform directory ops
+ */
+static int
+xfs_dir2_sf_entsize(
+	struct xfs_dir2_sf_hdr	*hdr,
+	int			len)
+{
+	int count = sizeof(struct xfs_dir2_sf_entry);	/* namelen + offset */
+
+	count += len;					/* name */
+	count += hdr->i8count ? XFS_INO64_SIZE : XFS_INO32_SIZE; /* ino # */
+	return count;
+}
+
+static int
+xfs_dir3_sf_entsize(
+	struct xfs_dir2_sf_hdr	*hdr,
+	int			len)
+{
+	return xfs_dir2_sf_entsize(hdr, len) + sizeof(uint8_t);
+}
+
+static struct xfs_dir2_sf_entry *
+xfs_dir2_sf_nextentry(
+	struct xfs_dir2_sf_hdr	*hdr,
+	struct xfs_dir2_sf_entry *sfep)
+{
+	return (struct xfs_dir2_sf_entry *)
+		((char *)sfep + xfs_dir2_sf_entsize(hdr, sfep->namelen));
+}
+
+static struct xfs_dir2_sf_entry *
+xfs_dir3_sf_nextentry(
+	struct xfs_dir2_sf_hdr	*hdr,
+	struct xfs_dir2_sf_entry *sfep)
+{
+	return (struct xfs_dir2_sf_entry *)
+		((char *)sfep + xfs_dir3_sf_entsize(hdr, sfep->namelen));
+}
+
+
+/*
+ * Convert block and offset to dataptr
+ */
+static inline xfs_dir2_dataptr_t
+xfs_dir2_db_off_to_dataptr(XFS_INFO *xfs, xfs_dir2_db_t db,
+               xfs_dir2_data_aoff_t o)
+{
+    return xfs_dir2_byte_to_dataptr(xfs_dir2_db_off_to_byte(xfs, db, o));
+}
 
 
 #endif

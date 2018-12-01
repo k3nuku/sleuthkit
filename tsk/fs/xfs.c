@@ -225,17 +225,19 @@ xfs_is_super_bg(uint32_t feature_ro_compat, uint32_t group_block)
  * Add a single extent -- that is, a single data ran -- to the file data attribute.
  * @return 0 on success, 1 on error.
  */
-/*
+
 static TSK_OFF_T
 xfs_make_data_run_extent(TSK_FS_INFO * fs_info, TSK_FS_ATTR * fs_attr,
-    xfs_extent * extent)
+    char * name, uint8_t ftype, TSK_INUM_T inum)
 {
     TSK_FS_ATTR_RUN *data_run;
+    XFS_INFO * xfs = (XFS_INFO *)fs_info;
     data_run = tsk_fs_attr_run_alloc();
     if (data_run == NULL) {
         return 1;
     }
-
+    data_run->offset = 0;
+    data_run->addr = xfs_inode_get_offset(xfs, inum);
     // TODO: data run on xfs
 
     // save the run
@@ -245,7 +247,7 @@ xfs_make_data_run_extent(TSK_FS_INFO * fs_info, TSK_FS_ATTR * fs_attr,
 
     return 0;
 }
-*/
+
 
 /** \internal
  * Given a block that contains an extent node (which starts with extent_header),
@@ -284,15 +286,16 @@ xfs_extent_tree_index_count(TSK_FS_INFO * fs_info,
  * @returns 0 on success, 1 otherwise
  */
 static uint8_t
-xfs_load_attrs_shortform(TSK_FS_FILE *fs_file)
+xfs_load_attrs_shortform(TSK_FS_FILE *fs_file, uint8_t * buf)
 {
     TSK_FS_META *fs_meta = fs_file->meta;
     TSK_FS_INFO *fs_info = fs_file->fs_info;
+    XFS_INFO * xfs = (XFS_INFO*)fs_info;
     TSK_OFF_T length = 0;
     TSK_FS_ATTR *fs_attr;
-
+    uint16_t num_entries;
     void * datafork = fs_meta->content_ptr;
-    
+
     if ((fs_meta->attr != NULL)
         && (fs_meta->attr_state == TSK_FS_META_ATTR_STUDIED)) {
         return 0;
@@ -311,12 +314,55 @@ xfs_load_attrs_shortform(TSK_FS_FILE *fs_file)
     if (TSK_FS_TYPE_ISXFS(fs_info->ftype) == 0) {
         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
         tsk_error_set_errstr
-        ("ext2fs_load_attr: Called with non-ExtX file system: %x",
+        ("ext2fs_load_attr: Called with no n-ExtX file system: %x",
          fs_info->ftype);
         return 1;
     }
     
     length = roundup(fs_meta->size, fs_info->block_size);
+    
+    if ((fs_attr =
+         tsk_fs_attrlist_getnew(fs_meta->attr,
+                                TSK_FS_ATTR_NONRES)) == NULL) {
+        return 1;
+    }
+    
+    if (tsk_fs_attr_set_run(fs_file, fs_attr, NULL, NULL,
+                            TSK_FS_ATTR_TYPE_DEFAULT, TSK_FS_ATTR_ID_DEFAULT,
+                            fs_meta->size, fs_meta->size, length, 0, 0)) {
+        return 1;
+    }
+    
+    xfs_dir2_sf_hdr_t *hdr;
+    xfs_dir2_sf_entry_t *ent;  
+
+    hdr = (xfs_dir2_sf_hdr_t*)buf;
+    ent = (char*)(hdr + 1) - (hdr->i8count==0) * 4; // code of miracle
+
+    if ((num_entries = (hdr->i8count > 0) ? hdr->i8count : hdr->count) == 0) {
+        fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
+        return 0;
+    }
+
+    for (int i = 0; i < num_entries; i++)
+    {    
+        char *name = (char*)tsk_malloc(sizeof(char) * (ent->namelen + 1));
+        memcpy(name, ent->name, ent->namelen);
+        name[ent->namelen] = '\0';
+        
+        fprintf(stderr, "name: %s\n", name);
+        
+        TSK_INUM_T inum = xfs_dir3_sfe_get_ino(hdr, ent);
+        uint8_t ftype = xfs_dir3_sfe_get_ftype(ent);
+
+        if (xfs_make_data_run_extent(fs_info, fs_attr, name, ftype, inum)) {
+            fprintf(stderr, "xfs.c:%d xfs_make_data_run_extent failed.\n", __LINE__);
+            return 1;
+        }
+        ent = xfs_dir3_sf_nextentry(hdr, ent); 
+        
+    }  
+    fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
     
     return 0;
 }
@@ -336,32 +382,31 @@ xfs_load_attrs(TSK_FS_FILE * fs_file)
     XFS_INFO *xfs = (XFS_INFO*)fs_file->fs_info;
 
 
-    TSK_OFF_T inooffset = fs_meta->content_ptr;
+    TSK_OFF_T inode_offset = fs_meta->content_ptr;
 
-    TSK_OFF_T off = inooffset + sizeof(xfs_dinode);     // data fork 까지 이동
-
-    //off = inooffset + 4; // remove 'ffff' of inode offset B0~B4
-
-    //uint32_t *addr_ptr = (uint32_t *) fs_meta->content_ptr;
-    
     uint32_t dfork_size = tsk_getu16(fs->endian, xfs->fs->sb_inodesize) - 0xb0;
-
+    
     uint8_t * buf = (uint8_t*)tsk_malloc(dfork_size);
-    uint32_t count = tsk_fs_read(fs, off, buf, dfork_size);
-    fprintf(stderr, "siiiiibal   content_ptr : 0x%x\n", fs_meta->content_ptr);
-    fprintf(stderr, "inode size : %d\n", tsk_getu16(fs->endian, xfs->fs->sb_inodesize));
-    fprintf(stderr, "count      : %d, sizeof buf      : %d\n", count, dfork_size);
-    for(int i = 0 ; i < dfork_size; i++){
-        fprintf(stderr, "%2lx ", buf[i]);
-        if(i%16 == 15)
-            fprintf(stderr, "\n");
-    }
-    fprintf(stderr, "\n");
+  
+    uint32_t count = tsk_fs_read(fs, inode_offset, buf, dfork_size);
+    //if(count !- blbla)
+    
+    //fprintf(stderr, "siiiiibal   content_ptr : 0x%x\n", fs_meta->content_ptr);
+    // fprintf(stderr, "inode size : %d\n", tsk_getu16(fs->endian, xfs->fs->sb_inodesize));
+    // fprintf(stderr, "count      : %d, sizeof buf      : %d\n", count, dfork_size);
+    // for(int i = 0 ; i < dfork_size; i++){
+    //     fprintf(stderr, "%2lx ", buf[i]);
+    //     if(i%16 == 15)
+    //         fprintf(stderr, "\n");
+    // }
+    // fprintf(stderr, "\n");
+
+
 
     //fprintf(stderr, "xfs_info: sb_inosize: %d\n", tsk_getu16(fs_file->fs_info->endian, xfs_info->fs->sb_inodesize));
 
     if(fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM){
-        xfs_load_attrs_shortform(fs_file);
+        xfs_load_attrs_shortform(fs_file, buf);
         return 0;
     }
     else if(fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM){
@@ -503,11 +548,8 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     if (fs_meta->attr) {
         tsk_fs_attrlist_markunused(fs_meta->attr);
     }
-    if (fs_meta->content_len != XFS_CONTENT_LEN_V5(xfs)) {
-         fprintf(stderr, "xfs.c:514 content_len is not XFS_CONTENT_LEN_V5  : %zu\n", fs_meta->content_len);
 
     // set the type
-                     XFS_CONTENT_LEN_V5(xfs))) == NULL) {
     switch (tsk_getu16(fs->endian, dino_buf->di_mode) & XFS_IN_FMT) {
     case XFS_IN_REG:
         fs_meta->type = TSK_FS_META_TYPE_REG;
@@ -600,8 +642,11 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
          fs_meta->link = NULL;
     }
 
+    if (fs_meta->content_len != XFS_CONTENT_LEN_V5(xfs)) {
+         fprintf(stderr, "xfs.c:514 content_len is not XFS_CONTENT_LEN_V5  : %d\n", fs_meta->content_len);
          if ((fs_meta =
                  tsk_fs_meta_realloc(fs_meta,
+                     XFS_CONTENT_LEN_V5(xfs))) == NULL) {
              return 1;
          }
     }
@@ -618,25 +663,22 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
         //off = inooffset + 4; // remove 'ffff' of inode offset B0~B4
     
         //uint32_t *addr_ptr = (uint32_t *) fs_meta->content_ptr;
-
-
-
         
-        uint32_t size = tsk_getu16(fs->endian, sb->sb_inodesize) - 0xb0;
+        // uint32_t size = tsk_getu16(fs->endian, sb->sb_inodesize) - 0xb0;
 
-        uint8_t * buf = (uint8_t*)tsk_malloc(size);
-        uint32_t count = tsk_fs_read(fs, off, buf, size);
+        // uint8_t * buf = (uint8_t*)tsk_malloc(size);
+
+        // uint32_t count = tsk_fs_read(fs, off, buf, size);
         
-
-
-        fprintf(stderr, "inode size : %d\n", tsk_getu16(fs->endian, sb->sb_inodesize));
-        fprintf(stderr, "count      : %d, sizeof buf      : %d\n", count, size);
-        for(int i = 0 ; i < size; i++){
-            fprintf(stderr, "%lx ", buf[i]);
-            if(i%16 == 15)
-                fprintf(stderr, "\n");
-        }
-        fprintf(stderr, "\n");
+        // fprintf(stderr, "sibal2 : %d", fs->endian);
+        // fprintf(stderr, "inode size : %d\n", tsk_getu16(fs->endian, sb->sb_inodesize));
+        // fprintf(stderr, "count      : %d, sizeof buf      : %d\n", count, size);
+        // for(int i = 0 ; i < size; i++){
+        //     fprintf(stderr, "%lx ", buf[i]);
+        //     if(i%16 == 15)
+        //         fprintf(stderr, "\n");
+        // }
+        // fprintf(stderr, "\n");
 
     }
     else if (dino_buf->di_format == 2){
@@ -760,7 +802,7 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
         //uint64_t content_len;
         //xfs->fs->             
         if ((a_fs_file->meta =      
-                tsk_fs_meta_alloc(XFS_CONTENT_LEN_V5)) == NULL) // #define XFS_CONTENT_LEN 
+                tsk_fs_meta_alloc(XFS_CONTENT_LEN_V5(xfs))) == NULL) // #define XFS_CONTENT_LEN 
             return 1;
     }
     else {
