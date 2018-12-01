@@ -1,15 +1,11 @@
 #include "tsk_fs_i.h"
 #include "tsk_xfs.h"
 
-//statit uint8_t
-//xfs_dent_copyXFS_INFO * xfs,
-//char ^ )
-
-static struct xfs_dir2_data_entry *
-xfs_dir3_data_entry_p(struct xfs_dir2_data_hdr *hdr)
+static int
+xfs_dir2_data_entsize(
+    int         n)
 {
-    return (struct xfs_dir2_data_entry *)
-        ((char *)hdr + sizeof(struct xfs_dir3_data_hdr));
+    return XFS_DIR2_DATA_ENTSIZE(n);
 }
 
 static int
@@ -17,6 +13,13 @@ xfs_dir3_data_entsize(
     int         n)
 {
     return XFS_DIR3_DATA_ENTSIZE(n);
+}
+
+static uint8_t
+xfs_dir2_data_get_ftype(
+    struct xfs_dir2_data_entry *dep)
+{
+    return XFS_DIR3_FT_UNKNOWN;
 }
 
 static uint8_t
@@ -119,7 +122,7 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     
     uint16_t num_entries = (hdr->i8count > 0) ? hdr->i8count : hdr->count;
 
-    fprintf(stderr, "[i] xfs_load_attrs_sf: xfs_dent.c: %d - entries: %d\n", __LINE__, num_entries);
+    fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - entries: %d\n", __LINE__, num_entries);
 
     for (int i = 0; i < num_entries; i++)
     {
@@ -133,11 +136,15 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
 
         memcpy(name, ent->name, namelen);
 
-        if (inode > fs->last_inum || namelen > XFS_MAXNAMELEN || namelen == 0)
+        //fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - inode: %lu, namelen: %d, name: %s: %d\n", __LINE__, num_entries);
+
+        if (inode > fs->last_inum || namelen > XFS_MAXNAMELEN || namelen == 0) {
+            fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - sanity check error\n", __LINE__);
             return TSK_ERR;
-        else
-            fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d | name : %s\n", __LINE__,
-                inode, namelen, fs->last_inum, name);
+        }
+
+        fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d | name : %s\n", __LINE__,
+            inode, namelen, fs->last_inum, name);
 
         if (xfs_dent_copy(xfs, dir2_sf, fs_name)) {
             tsk_fs_name_free(fs_name);
@@ -162,6 +169,7 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
         //     filename, filetype, inumdata, offset);
 
         ent = xfs_dir3_sf_nextentry(hdr, ent);
+
         // offset += sizeof(xfs_dir2_sf_entry_t) 
         //             + namelen * sizeof(char)
         //             + sizeof(TSK_INUM_T);
@@ -269,6 +277,8 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
+    fprintf(stderr, "[i] xfs_dent_parse: xfs_dent.c: %d - called.\n", __LINE__);
+
     TSK_FS_INFO* fs_info = (TSK_FS_INFO*) xfs;
     
     switch(a_fs_dir->fs_file->meta->content_type){
@@ -301,7 +311,7 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
 {
     // directory inode로부터 tsk_fs_dir -> tsk_fs_file 채우는거
-    fprintf(stderr, "\nxfs_dir_open_meta: called\n");
+    fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - called.\n", __LINE__);
 
     XFS_INFO * xfs = (XFS_INFO *) a_fs;
     TSK_FS_DIR * fs_dir;
@@ -361,6 +371,7 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
 
     // We only read in and process a single block at a time
     if ((dirbuf = tsk_malloc((size_t)a_fs->block_size)) == NULL) {
+        fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - failed to malloc\n", __LINE__);
         return TSK_ERR;
     }
 
@@ -377,6 +388,7 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
         case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM:
             cnt = len = XFS_CONTENT_LEN_V5(xfs);    
             memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
+            fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - skipping shortform to call tsk_fs_file_read\n", __LINE__);
             break;
 
         case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS:
@@ -401,6 +413,9 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     }
 
     if (cnt != len) {
+        fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - failed to compare count and len cnt: %d len:%d\n",
+            __LINE__, cnt, len);
+
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_FWALK);
         tsk_error_set_errstr

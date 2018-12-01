@@ -2,6 +2,7 @@
 #define _TSK_XFS_H
 
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,9 @@ typedef uint32_t  xfs_rfsblock_t; /* blockno in filesystem (raw) */
 typedef uint64_t XFS_AGNUM_T;
 typedef uint        xfs_dir2_data_aoff_t;   /* argument form */
 typedef uint32_t    xfs_dir2_dataptr_t;
+
+#define __round_mask(x, y) ((__typeof__(x))((y)-1))
+#define round_up(x, y) ((((x)-1) | __round_mask(x, y))+1)
 
 #define 	XFS_MIN_AG_BLOCKS   64
 // for checking filesystem sanity checking
@@ -198,6 +202,28 @@ static inline bool xfs_sb_has_incompat_log_feature(
 #define XFS_DIR3_FT_SYMLINK		7
 #define XFS_DIR3_FT_WHT			8
 #define XFS_DIR3_FT_MAX			9
+
+/*
+ * For special situations, the dirent size ends up fixed because we always know
+ * what the size of the entry is. That's true for the "." and "..", and
+ * therefore we know that they are a fixed size and hence their offsets are
+ * constant, as is the first entry.
+ *
+ * Hence, this calculation is written as a macro to be able to be calculated at
+ * compile time and so certain offsets can be calculated directly in the
+ * structure initaliser via the macro. There are two macros - one for dirents
+ * with ftype and without so there are no unresolvable conditionals in the
+ * calculations. We also use round_up() as XFS_DIR2_DATA_ALIGN is always a power
+ * of 2 and the compiler doesn't reject it (unlike roundup()).
+ */
+#define XFS_DIR2_DATA_ENTSIZE(n)                    \
+    round_up((offsetof(struct xfs_dir2_data_entry, name[0]) + (n) + \
+         sizeof(uint16_t)), XFS_DIR2_DATA_ALIGN)
+
+#define XFS_DIR3_DATA_ENTSIZE(n)                    \
+    round_up((offsetof(struct xfs_dir2_data_entry, name[0]) + (n) + \
+         sizeof(uint16_t) + sizeof(uint8_t)),    \
+        XFS_DIR2_DATA_ALIGN)
 
 /*
     Superblock - Must be padded to 64 bit alignment.
@@ -743,16 +769,7 @@ xfs_dir3_sfe_get_ino(
 {
     return xfs_dir2_sf_get_ino(hdr, &sfep->name[sfep->namelen + 1]);
 }
-/*
-static void
-xfs_dir3_sfe_put_ino(
-    struct xfs_dir2_sf_hdr  *hdr,
-    struct xfs_dir2_sf_entry *sfep,
-    xfs_ino_t       ino)
-{
-    xfs_dir2_sf_put_ino(hdr, &sfep->name[sfep->namelen + 1], ino);
-}
-*/
+
 /*
     Data block structure:: Free area in data block
 */
@@ -764,7 +781,31 @@ typedef struct xfs_dir2_data_free {
 /*
     Data block structure:: Header for the data block
 */
+
+#define XFS_DIR3_DATA_CRC_OFF  offsetof(struct xfs_dir3_data_hdr, hdr.crc)
 #define XFS_DIR2_DATA_FD_COUNT 3
+
+/*
+ * define a structure for all the verification fields we are adding to the
+ * directory block structures. This will be used in several structures.
+ * The magic number must be the first entry to align with all the dir2
+ * structures so we determine how to decode them just by the magic number.
+ */
+struct xfs_dir3_blk_hdr {
+    uint32_t          magic;  /* magic number */
+    uint32_t          crc;    /* CRC of block */
+    uint64_t          blkno;  /* first block of the buffer */
+    uint64_t          lsn;    /* sequence number of last write */
+    uuid_t          uuid;   /* filesystem we belong to */
+    uint64_t          owner;  /* inode that owns the block */
+};
+
+struct xfs_dir3_data_hdr {
+    struct xfs_dir3_blk_hdr hdr;
+    xfs_dir2_data_free_t    best_free[XFS_DIR2_DATA_FD_COUNT];
+    uint32_t          pad;    /* 64 bit alignment */
+};
+
 typedef struct xfs_dir2_data_hdr {
     uint32_t          magic;      /* XFS_DIR2_DATA_MAGIC or */
                         /* XFS_DIR2_BLOCK_MAGIC */
@@ -781,28 +822,6 @@ typedef struct xfs_dir2_data_entry {
      /* uint8_t            filetype; */    /* type of inode we point to */
      /* uint16_t                  tag; */     /* starting offset of us */
 } xfs_dir2_data_entry_t;
-
-/*
- * define a structure for all the verification fields we are adding to the
- * directory block structures. This will be used in several structures.
- * The magic number must be the first entry to align with all the dir2
- * structures so we determine how to decode them just by the magic number.
- */
-struct xfs_dir3_blk_hdr {
-    uint32_t          magic;  /* magic number */
-    uint32_t          crc;    /* CRC of block */
-    uint64_t          blkno;  /* first block of the buffer */
-    uint64_t          lsn;    /* sequence number of last write */
-    uint8_t           uuid[16];
-//    uuid_t          uuid;   /* filesystem we belong to */
-    uint64_t          owner;  /* inode that owns the block */
-};
-
-struct xfs_dir3_data_hdr {
-    struct xfs_dir3_blk_hdr hdr;
-    xfs_dir2_data_free_t    best_free[XFS_DIR2_DATA_FD_COUNT];
-    uint32_t          pad;    /* 64 bit alignment */
-};
 
 /*
     Data block structure:: empty entry
@@ -1273,6 +1292,28 @@ xfs_dir3_sfe_get_ftype(
 	return ftype;
 }
 
+static uint8_t
+xfs_dir3_blockentry_get_ftype(
+    struct xfs_dir2_data_entry *sfep)
+{
+    uint8_t ftype;
+    ftype = sfep->name[sfep->namelen];
+    if (ftype >= XFS_DIR3_FT_MAX)
+        return XFS_DIR3_FT_UNKNOWN;
+    return ftype;
+}
+
+static uint16_t
+xfs_dir3_blockentry_get_tag(
+    struct xfs_dir2_data_entry *sfep)
+{
+    uint16_t ftype;
+    ftype = sfep->name[sfep->namelen + 1];
+    if (ftype >= XFS_DIR3_FT_MAX)
+        return XFS_DIR3_FT_UNKNOWN;
+    return ftype;
+}
+
 static inline 
 TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
     fprintf(stderr, "xfs_inode_get_offset called. inode num : %d\n", a_addr);
@@ -1335,6 +1376,11 @@ typedef struct xfs_bmbt_rec
 typedef xfs_off_t   xfs_dir2_off_t;
 typedef uint32_t    xfs_dir2_db_t;
 typedef uint        xfs_dir2_data_aoff_t;   /* argument form */
+
+#define XFS_FSB_TO_AGNO(xfs,fsbno)   \
+    ((uint32_t)((fsbno) >> (xfs)->fs->sb_agblklog))
+#define XFS_FSB_TO_AGBNO(mp,fsbno)  \
+    ((uint32_t)((fsbno) & xfs_mask32lo((xfs)->fs->sb_agblklog)))
 
 static inline uint16_t get_unaligned_be16(const uint8_t *p)
 {
@@ -1411,6 +1457,13 @@ xfs_dir3_sf_nextentry(
 		((char *)sfep + xfs_dir3_sf_entsize(hdr, sfep->namelen));
 }
 
+static struct xfs_dir2_data_entry *
+xfs_dir2_data_nextentry(
+    struct xfs_dir2_data_entry *daen)
+{
+    return (struct xfs_dir2_data_entry *)
+    ((char*)daen + XFS_DIR3_DATA_ENTSIZE(daen->namelen));
+}
 
 /*
  * Convert block and offset to dataptr
