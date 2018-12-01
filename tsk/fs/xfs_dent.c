@@ -34,62 +34,61 @@ static uint8_t
 xfs_dent_copy(XFS_INFO * xfs,
     char *xfs_dent, TSK_FS_NAME * fs_name)
 {
-    // 덴트 카피를 해야함.
-    // 타입은 3개. 숏폼, 블럭, 리프
-    // xfs_dent에서 넘어오는 데이터를 적절히 deserialization해서 넣어야 함
-    // 적절히 어떻게?
-    // 매직넘버?
+    fprintf(stderr, ">> xfs_dent_copy called.\n");
+    
+    TSK_FS_INFO *fs = &(xfs->fs_info);
+    // if format 1 (short form)
+    
+    xfs_dir2_sf_t * dir2_sf = (xfs_dir2_sf_t*) xfs_dent;
+    xfs_dir2_sf_hdr_t * hdr = (xfs_dir2_sf_hdr_t*) dir2_sf->hdr;
+    xfs_dir2_sf_entry_t * ent = (xfs_dir2_sf_entry_t*) dir2_sf->entry;
 
-    // TSK_FS_INFO *fs = &(xfs->fs_info);
+    fs_name->meta_addr = (TSK_INUM_T)xfs_dir3_sfe_get_ino(hdr, ent);
+    
+    if(ent->namelen >= fs_name->name_size){
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_ARG);
+        tsk_error_set_errstr
+            ("xfs_dent_copy: Name Space too Small %d %" PRIuSIZE "",
+           ent->namelen, fs_name->name_size);
+        return 1;
+    }
+    
+    strncpy(fs_name->name, ent->name, ent->namelen);
+    fs_name->name[ent->namelen] = '\0';
 
-    // ext2fs_dentry2 *dir = (ext2fs_dentry2 *) ext2_dent;
+    fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
 
-    // fs_name->meta_addr = tsk_getu32(fs->endian, dir->inode);
+    switch (xfs_dir3_sfe_get_ftype(ent)) {
+        case XFS_DE_REG:
+            fs_name->type = TSK_FS_NAME_TYPE_REG;
+            break;
+        case XFS_DE_DIR:
+            fs_name->type = TSK_FS_NAME_TYPE_DIR;
+            break;
+        case XFS_DE_CHR:
+            fs_name->type = TSK_FS_NAME_TYPE_CHR;
+            break;
+        case XFS_DE_BLK:
+            fs_name->type = TSK_FS_NAME_TYPE_BLK;
+            break;
+        case XFS_DE_FIFO:
+            fs_name->type = TSK_FS_NAME_TYPE_FIFO;
+            break;
+        case XFS_DE_SOCK:
+            fs_name->type = TSK_FS_NAME_TYPE_SOCK;
+            break;
+        case XFS_DE_LNK:
+            fs_name->type = TSK_FS_NAME_TYPE_LNK;
+            break;
+        case XFS_DE_UNKNOWN:
+        default:
+            fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
+            break;
+    }
+    fs_name->flags = 0;
 
-    // /* ext2 does not null terminate */
-    // if (dir->name_len >= fs_name->name_size) {
-    //     tsk_error_reset();
-    //     tsk_error_set_errno(TSK_ERR_FS_ARG);
-    //     tsk_error_set_errstr
-    //         ("xfs_dent_copy: Name Space too Small %d %" PRIuSIZE "",
-    //         dir->name_len, fs_name->name_size);
-    //     return 1;
-    // }
-
-    // /* Copy and Null Terminate */
-    // strncpy(fs_name->name, dir->name, dir->name_len);
-    // fs_name->name[dir->name_len] = '\0';
-
-    // switch (dir->type) {
-    // case EXT2_DE_REG:
-    //     fs_name->type = TSK_FS_NAME_TYPE_REG;
-    //     break;
-    // case EXT2_DE_DIR:
-    //     fs_name->type = TSK_FS_NAME_TYPE_DIR;
-    //     break;
-    // case EXT2_DE_CHR:
-    //     fs_name->type = TSK_FS_NAME_TYPE_CHR;
-    //     break;
-    // case EXT2_DE_BLK:
-    //     fs_name->type = TSK_FS_NAME_TYPE_BLK;
-    //     break;
-    // case EXT2_DE_FIFO:
-    //     fs_name->type = TSK_FS_NAME_TYPE_FIFO;
-    //     break;
-    // case EXT2_DE_SOCK:
-    //     fs_name->type = TSK_FS_NAME_TYPE_SOCK;
-    //     break;
-    // case EXT2_DE_LNK:
-    //     fs_name->type = TSK_FS_NAME_TYPE_LNK;
-    //     break;
-    // case EXT2_DE_UNKNOWN:
-    // default:
-    //     fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
-    //     break;
-    // }
-
-    // fs_name->flags = 0;
-
+    fprintf(stderr, ">> xfs_dent_copy passed.\n");
     return 0;
 }
 
@@ -97,50 +96,67 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
+    TSK_FS_INFO *fs = &(xfs->fs_info);
+    
+    TSK_FS_NAME * fs_name;
     xfs_dir2_sf_hdr_t *hdr;
-
-    uint64_t bit64_count = 0;
-    uint32_t bit32_count = 0;
+    xfs_dir2_sf_entry_t *ent; 
     
-    TSK_INUM_T parent;
-
-    char* filename;
-    uint16_t eoffset;
+    // dir2_sf = dir2_sf header + dir2_sf entry => to calculate inode offset in dent_copy 
+    xfs_dir2_sf_t * dir2_sf = (xfs_dir2_sf_t *)tsk_malloc(sizeof(xfs_dir2_sf_t));
+    hdr = (xfs_dir2_sf_hdr_t*)buf;
+    dir2_sf->hdr = hdr;   
+    
+    uint8_t ftype;
     uint8_t namelen;
-    uint8_t filetype;
-    TSK_INUM_T inumdata;
-
-    hdr = (xfs_dir2_sf_hdr_t*)offset;
+    uint64_t inode;
     
-    // sf header 파싱 -> count, parent 저장
-    //parent = tsk_getu64(xfs->fs_info.endian, hdr->parent);
+    if ((fs_name = tsk_fs_name_alloc(XFS_MAXNAMELEN + 1, 0)) == NULL)
+        return TSK_ERR;
 
-    if (hdr->i8count > 0)
-        //bit64_count = tsk_getu64(xfs->fs_info.endian, hdr->parent);
-    //else
-        //bit32_count = hdr->count;
+    ent = (char*)(hdr + 1) - (hdr->i8count==0) * 4; // code of miracle
+    
+    uint16_t num_entries = (hdr->i8count > 0) ? hdr->i8count : hdr->count;
 
-    offset += sizeof(xfs_dir2_sf_hdr_t); // +80
-
-    // 이제 sf_entry_t로 해석
-    for (int i = 0; i < (bit64_count > 0 ? bit64_count : bit32_count); i++)
+    for (int i = 0; i < num_entries; i++)
     {
-        xfs_dir2_sf_entry_t *entry = (xfs_dir2_sf_entry_t*)offset;
+        dir2_sf->entry = ent;
+        namelen = ent->namelen;
+        inode = xfs_dir2_sf_get_ino(hdr, ent);
+        if(inode > fs->last_inum ||
+            namelen > XFS_MAXNAMELEN ||
+            namelen == 0){
+            fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d\n", __LINE__, inode, namelen, fs->last_inum);
+            //fprintf(stderr, "xfs_dent.c:%d ->xfs_dent_parse_shortform: Invalid inode.\n",__LINE__);
+        }
 
-        namelen = entry->namelen;
-        eoffset = tsk_getu16(xfs->fs_info.endian, entry->offset);
-        filename = entry->name;
-        filetype = xfs_dir3_sfe_get_ftype(entry);
-        inumdata = xfs_dir3_sfe_get_ino(hdr, entry);
+        if (xfs_dent_copy(xfs, dir2_sf, fs_name)) {
+            tsk_fs_name_free(fs_name);
+            return TSK_ERR;
+        }
 
-        tsk_fprintf(stderr, "[%lu] name: %s | type: %d | inode: %d | atoffset: 0x%lu\n",
-            filename, filetype, inumdata, offset);
+        fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
+        /* Do we have a deleted entry? */
+        
+        // if ((dellen > 0) || (inode == 0) || (a_is_del)) {
+        //     fs_name->flags = TSK_FS_NAME_FLAG_UNALLOC;
+        //     if (dellen > 0)
+        //         dellen -= minreclen;
+        // }
+        
+        if (tsk_fs_dir_add(a_fs_dir, fs_name)) {
+            tsk_fs_name_free(fs_name);
+            return TSK_ERR;
+        }
 
-        offset += sizeof(xfs_dir2_sf_entry_t) 
-                    + namelen * sizeof(char)
-                    + sizeof(TSK_INUM_T);
+        // tsk_fprintf(stderr, "[%lu] name: %s | type: %d | inode: %d | atoffset: 0x%lu\n",
+        //     filename, filetype, inumdata, offset);
+
+        // offset += sizeof(xfs_dir2_sf_entry_t) 
+        //             + namelen * sizeof(char)
+        //             + sizeof(TSK_INUM_T);
     }
-
+    tsk_fs_name_free(fs_name);
     return TSK_OK;
 }
 
@@ -243,6 +259,17 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
+    TSK_FS_INFO* fs_info = (TSK_FS_INFO*) xfs;
+    
+    switch(a_fs_dir->fs_file->meta->content_type){
+        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM:
+            xfs_dent_parse_shortform(xfs, a_fs_dir, a_is_del, list_seen, buf, offset);
+            break;
+
+        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BLOCK:
+            break;
+    }
+
     return TSK_OK;
 }
 /** \internal
@@ -332,9 +359,20 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     fprintf(stderr, "metasize: %d\n", fs_dir->fs_file->meta->size);
 
     while (size > 0) {
-        ssize_t len = (a_fs->block_size < size) ? a_fs->block_size : size;
-        ssize_t cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
-        
+        ssize_t len;
+        ssize_t cnt;
+        if(fs_dir->fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM){
+            /// if short form - case of only diretory
+            cnt = len = XFS_CONTENT_LEN_V5(xfs);
+            memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
+            //if(cnt != len){
+            //     fprintf(stderr, "xfs_dent.c:%d  invalid datafork read size : cnt : %d   con_len : %d\n", __LINE__);            }
+        }
+        else{
+            len = (a_fs->block_size < size) ? a_fs->block_size : size;
+            cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
+        }
+                
         if (cnt != len) {
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_FWALK);

@@ -23,6 +23,7 @@ typedef uint32_t    xfs_dir2_dataptr_t;
     (tsk_getu32(&(fs->endian), ((s)->sb_agcount)) - 1) * \
      tsk_getu32(&(fs->endian), (s)->sb_agblocks) + XFS_MIN_AG_BLOCKS)
 
+#define XFS_MAXNAMELEN 255
 
 #define XFS_INODE_CORE_SIZE_VER4 96
 #define XFS_INODE_CORE_SIZE_VER5 176
@@ -626,6 +627,11 @@ typedef struct xfs_dir2_sf_entry {
      * after the name.
      */
 } xfs_dir2_sf_entry_t;
+
+typedef struct xfs_dir2_sf {
+    xfs_dir2_sf_hdr_t *hdr;
+    xfs_dir2_sf_entry_t *entry;
+} xfs_dir2_sf_t;
 
 static inline uint32_t get_unaligned_be32(const uint8_t *p)
 {
