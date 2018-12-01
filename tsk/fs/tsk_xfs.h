@@ -28,6 +28,18 @@ typedef uint32_t    xfs_dir2_dataptr_t;
 #define XFS_INODE_CORE_SIZE_VER4 96
 #define XFS_INODE_CORE_SIZE_VER5 176
 
+/*
+ * Bmap btree record and extent descriptor.
+ *  l0:63 is an extent flag (value 1 indicates non-normal).
+ *  l0:9-62 are startoff.
+ *  l0:0-8 and l1:21-63 are startblock.
+ *  l1:0-20 are blockcount.
+ */
+#define BMBT_EXNTFLAG_BITLEN    1
+#define BMBT_STARTOFF_BITLEN    54
+#define BMBT_STARTBLOCK_BITLEN  52
+#define BMBT_BLOCKCOUNT_BITLEN  21
+
 #define XFS_CONTENT_LEN_V4(xfs) (tsk_getu16((xfs)->fs_info.endian, (xfs)->fs->sb_inodesize) - XFS_INODE_CORE_SIZE_VER4)
 #define XFS_CONTENT_LEN_V5(xfs) (tsk_getu16((xfs)->fs_info.endian, (xfs)->fs->sb_inodesize) - XFS_INODE_CORE_SIZE_VER5)
 
@@ -1304,51 +1316,21 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
     return offset;
 }
 
+typedef enum {
+    XFS_EXT_NORM, XFS_EXT_UNWRITTEN,
+} xfs_exntst_t;
 
 typedef struct xfs_bmbt_irec {
     uint64_t        br_startoff;
     uint32_t 	    br_startblock;
     uint64_t        br_blockcount;
-    // xfs_exntst_t     br_state;
+    xfs_exntst_t     br_state;
 } xfs_bmbt_irec_t;
 
 typedef struct xfs_bmbt_rec
 {
-	uint8_t			fw[8], bw[8];
+	uint8_t			l0[8], l1[8];
 } xfs_bmbt_rec_t;
-
-static inline 
-struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t * bmbt_rec){
-    fprintf(stderr, "xfs_extent_get_offset called.\n");
-
-    TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
-
-    // for(int i = 0 ; i < 16; i++){
-    //     if (i < 8)
-    //         fprintf(stderr, "%2u ", bmbt_rec->fw[i]);
-    //     else
-    //         fprintf(stderr, "%2u ", bmbt_rec->bw[i-8]);
-    // }
-    // fprintf(stderr, "\n");
-    xfs_bmbt_irec_t rec;
-    
-
-    
-    rec.br_startoff = (tsk_getu64(fs->endian, bmbt_rec->fw) & (uint64_t)0x7fffffffffffffff) >>  9;
-    
-    rec.br_blockcount = (tsk_getu64(fs->endian, bmbt_rec->bw) & (uint64_t)0x1fffff);
-    
-    uint32_t absblock = ((tsk_getu64(fs->endian, bmbt_rec->fw) & (uint64_t)0x1ff) << 43) +
-                        ((tsk_getu64(fs->endian, bmbt_rec->bw) - rec.br_blockcount) >> 21);
-
-    rec.br_startblock = ((absblock >> xfs->fs->sb_agblklog) * tsk_getu32(fs->endian, xfs->fs->sb_agblocks) 
-                        + absblock - (0x1 << xfs->fs->sb_agblklog)) * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
-
-    //fprintf(stderr, "extent : %llx  |  start_off : %lx  |  block num : %lx  | block count : %lx\n", tsk_getu64(fs->endian, bmbt_rec->bw), rec.br_startoff, rec.br_startblock, rec.br_blockcount);
-
-
-    return rec;
-}
 
 typedef xfs_off_t   xfs_dir2_off_t;
 typedef uint32_t    xfs_dir2_db_t;
@@ -1440,5 +1422,20 @@ xfs_dir2_db_off_to_dataptr(XFS_INFO *xfs, xfs_dir2_db_t db,
     return xfs_dir2_byte_to_dataptr(xfs_dir2_db_off_to_byte(xfs, db, o));
 }
 
+/*
+ * masks with n high/low bits set, 64-bit values
+ */
+static inline uint64_t xfs_mask64hi(int n)
+{
+    return (uint64_t)-1 << (64 - (n));
+}
+static inline uint32_t xfs_mask32lo(int n)
+{
+    return ((uint32_t)1 << (n)) - 1;
+}
+static inline uint64_t xfs_mask64lo(int n)
+{
+    return ((uint64_t)1 << (n)) - 1;
+}
 
 #endif

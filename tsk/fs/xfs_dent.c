@@ -34,7 +34,7 @@ static uint8_t
 xfs_dent_copy(XFS_INFO * xfs,
     char *xfs_dent, TSK_FS_NAME * fs_name)
 {
-    fprintf(stderr, ">> xfs_dent_copy called.\n");
+    //fprintf(stderr, ">> xfs_dent_copy called.\n");
     
     TSK_FS_INFO *fs = &(xfs->fs_info);
     // if format 1 (short form)
@@ -88,7 +88,7 @@ xfs_dent_copy(XFS_INFO * xfs,
     }
     fs_name->flags = 0;
 
-    fprintf(stderr, ">> xfs_dent_copy passed.\n");
+    //fprintf(stderr, ">> xfs_dent_copy passed.\n");
     return 0;
 }
 
@@ -96,6 +96,7 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
+    fprintf(stderr, "[i] xfs_dent_parse_sf: xfs_dent.c: %d - called.\n", __LINE__);
     TSK_FS_INFO *fs = &(xfs->fs_info);
     
     TSK_FS_NAME * fs_name;
@@ -110,7 +111,7 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t ftype;
     uint8_t namelen;
     uint64_t inode;
-    
+
     if ((fs_name = tsk_fs_name_alloc(XFS_MAXNAMELEN + 1, 0)) == NULL)
         return TSK_ERR;
 
@@ -118,17 +119,25 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     
     uint16_t num_entries = (hdr->i8count > 0) ? hdr->i8count : hdr->count;
 
+    fprintf(stderr, "[i] xfs_load_attrs_sf: xfs_dent.c: %d - entries: %d\n", __LINE__, num_entries);
+
     for (int i = 0; i < num_entries; i++)
     {
         dir2_sf->entry = ent;
         namelen = ent->namelen;
         inode = xfs_dir2_sf_get_ino(hdr, ent);
-        if(inode > fs->last_inum ||
-            namelen > XFS_MAXNAMELEN ||
-            namelen == 0){
-            fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d\n", __LINE__, inode, namelen, fs->last_inum);
-            //fprintf(stderr, "xfs_dent.c:%d ->xfs_dent_parse_shortform: Invalid inode.\n",__LINE__);
-        }
+
+        char* name;
+        name = (char*)tsk_malloc(sizeof(char) * (namelen + 1));
+        name[namelen] = '\0';
+
+        memcpy(name, ent->name, namelen);
+
+        if (inode > fs->last_inum || namelen > XFS_MAXNAMELEN || namelen == 0)
+            return TSK_ERR;
+        else
+            fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d | name : %s\n", __LINE__,
+                inode, namelen, fs->last_inum, name);
 
         if (xfs_dent_copy(xfs, dir2_sf, fs_name)) {
             tsk_fs_name_free(fs_name);
@@ -152,6 +161,7 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
         // tsk_fprintf(stderr, "[%lu] name: %s | type: %d | inode: %d | atoffset: 0x%lu\n",
         //     filename, filetype, inumdata, offset);
 
+        ent = xfs_dir3_sf_nextentry(hdr, ent);
         // offset += sizeof(xfs_dir2_sf_entry_t) 
         //             + namelen * sizeof(char)
         //             + sizeof(TSK_INUM_T);
@@ -266,12 +276,13 @@ xfs_dent_parse(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
             xfs_dent_parse_shortform(xfs, a_fs_dir, a_is_del, list_seen, buf, offset);
             break;
 
-        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BLOCK:
+        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS:
             break;
     }
 
     return TSK_OK;
 }
+
 /** \internal
 * Process a directory and load up FS_DIR with the entries. If a pointer to
 * an already allocated FS_DIR structure is given, it will be cleared.  If no existing
@@ -290,7 +301,7 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
 {
     // directory inode로부터 tsk_fs_dir -> tsk_fs_file 채우는거
-    fprintf(stderr, "xfs_dir_open_meta: called\n");
+    fprintf(stderr, "\nxfs_dir_open_meta: called\n");
 
     XFS_INFO * xfs = (XFS_INFO *) a_fs;
     TSK_FS_DIR * fs_dir;
@@ -358,30 +369,12 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
 
     fprintf(stderr, "metasize: %d\n", fs_dir->fs_file->meta->size);
 
-    while (size > 0) {
-        ssize_t len;
-        ssize_t cnt;
-        if(fs_dir->fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM){
-            /// if short form - case of only diretory
-            cnt = len = XFS_CONTENT_LEN_V5(xfs);
-            memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
-            //if(cnt != len){
-            //     fprintf(stderr, "xfs_dent.c:%d  invalid datafork read size : cnt : %d   con_len : %d\n", __LINE__);            }
-        }
-        else{
-            len = (a_fs->block_size < size) ? a_fs->block_size : size;
-            cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
-        }
-                
-        if (cnt != len) {
-            tsk_error_reset();
-            tsk_error_set_errno(TSK_ERR_FS_FWALK);
-            tsk_error_set_errstr
-            ("xfs_dir_open_meta: Error reading directory contents: %"
-                PRIuINUM "\n", a_addr);
-            free(dirbuf);
-            return TSK_COR;
-        }
+    ssize_t len;
+    ssize_t cnt;
+
+    if (fs_dir->fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM) {
+        cnt = len = XFS_CONTENT_LEN_V5(xfs);
+        memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
 
         retval_tmp =
             xfs_dent_parse(xfs, fs_dir,
@@ -389,21 +382,48 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
                 flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
             dirbuf, len);
 
-        if (retval_tmp == TSK_ERR) {
+        if (retval_tmp == TSK_ERR)
             retval_final = TSK_ERR;
-            break;
-        }
-        else if (retval_tmp == TSK_COR) {
+        else if (retval_tmp == TSK_COR)
             retval_final = TSK_COR;
-        }
+    }
+    else {
+        while (size > 0) {
+            len = (a_fs->block_size < size) ? a_fs->block_size : size;
+            cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
+                    
+            if (cnt != len) {
+                tsk_error_reset();
+                tsk_error_set_errno(TSK_ERR_FS_FWALK);
+                tsk_error_set_errstr
+                ("xfs_dir_open_meta: Error reading directory contents: %"
+                    PRIuINUM "\n", a_addr);
+                free(dirbuf);
+                return TSK_COR;
+            }
 
-        size -= len;
-        offset += len;
+            retval_tmp =
+                xfs_dent_parse(xfs, fs_dir,
+                (fs_dir->fs_file->meta->
+                    flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
+                dirbuf, len);
+
+            if (retval_tmp == TSK_ERR) {
+                retval_final = TSK_ERR;
+                break;
+            }
+            else if (retval_tmp == TSK_COR) {
+                retval_final = TSK_COR;
+            }
+
+            size -= len;
+            offset += len;
+        }
     }
 
     free(dirbuf);
 
-    fprintf(stderr, "xfs_dir_open_meta: passed\n");
+    fprintf(stderr, "xfs_dir_open_meta: passed\n\n");
     return TSK_OK;
 }
 
