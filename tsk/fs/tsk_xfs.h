@@ -591,15 +591,8 @@ typedef struct xfs_bmdr_block {
     uint8_t      bb_numrecs[2]; /* current # of data records */
 } xfs_bmdr_block_t;
 
-/*
-    Data Extent (raw) - should be extracted before used
-*/
-typedef struct xfs_bmbt_rec {
-    uint8_t          l0[8], l1[8];
-} xfs_bmbt_rec_t;
-
 typedef uint64_t	xfs_bmbt_rec_base_t;	/* use this for casts */
-typedef xfs_bmbt_rec_t xfs_bmdr_rec_t;
+//typedef xfs_bmbt_rec_t xfs_bmdr_rec_t;
 
 /*
     Key structure -> Non-leaf level Tree
@@ -937,6 +930,12 @@ typedef struct xfs_attr_shortform {
         uint8_t nameval[1]; /* name & value bytes concatenated */
     } list[1];          /* variable sized array */
 } xfs_attr_shortform_t;
+
+
+typedef union {
+    uint8_t i8[8];
+    uint8_t i4[4];
+} xfs_dir2_inou_t;
 
 // Btree block format
 /* short form block header */
@@ -1300,35 +1299,140 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
 }
 
 
-// typedef struct xfs_bmbt_irec {
-//     uint64_t        br_startoff;
-//     uint32_t 	    br_startblock;
-//     uint64_t        br_blockcount;
-//     // xfs_exntst_t     br_state;
-// } xfs_bmbt_irec_t;
+typedef struct xfs_bmbt_irec {
+    uint64_t        br_startoff;
+    uint32_t 	    br_startblock;
+    uint64_t        br_blockcount;
+    // xfs_exntst_t     br_state;
+} xfs_bmbt_irec_t;
 
-// typedef struct xfs_bmbt_rec
-// {
-// 	uint8_t			l0[8], l1[8];
-// } xfs_bmbt_rec_t;
+typedef struct xfs_bmbt_rec
+{
+	uint8_t			fw[8], bw[8];
+} xfs_bmbt_rec_t;
 
-// static inline 
-// struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t bmbt_rec){
-//     fprintf(stderr, "xfs_extent_get_offset called.\n");
+static inline 
+struct xfs_bmbt_irec xfs_extent_get_offset(XFS_INFO * xfs, xfs_bmbt_rec_t * bmbt_rec){
+    fprintf(stderr, "xfs_extent_get_offset called.\n");
 
-//     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
-//     xfs_bmbt_irec_t rec;
+    TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
 
-//     uint64_t br_start_off = tsk_getu64(fs->endian, &bmbt_rec.10) & (uint64_t)0x7fffffffffffffff; 
+    // for(int i = 0 ; i < 16; i++){
+    //     if (i < 8)
+    //         fprintf(stderr, "%2u ", bmbt_rec->fw[i]);
+    //     else
+    //         fprintf(stderr, "%2u ", bmbt_rec->bw[i-8]);
+    // }
+    // fprintf(stderr, "\n");
+    xfs_bmbt_irec_t rec;
+    
 
-//     //  tsk_getu64(fs->endian, xfs_bmbt_rec.10) << 64 +
-//     //                  tsk_getu64(fs->endian, xfs_bmbt_rec.11) ;
+    
+    rec.br_startoff = (tsk_getu64(fs->endian, bmbt_rec->fw) & (uint64_t)0x7fffffffffffffff) >>  9;
+    
+    rec.br_blockcount = (tsk_getu64(fs->endian, bmbt_rec->bw) & (uint64_t)0x1fffff);
+    
+    uint32_t absblock = ((tsk_getu64(fs->endian, bmbt_rec->fw) & (uint64_t)0x1ff) << 43) +
+                        ((tsk_getu64(fs->endian, bmbt_rec->bw) - rec.br_blockcount) >> 21);
+
+    rec.br_startblock = ((absblock >> xfs->fs->sb_agblklog) * tsk_getu32(fs->endian, xfs->fs->sb_agblocks) 
+                        + absblock - (0x1 << xfs->fs->sb_agblklog)) * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
+
+    //fprintf(stderr, "extent : %llx  |  start_off : %lx  |  block num : %lx  | block count : %lx\n", tsk_getu64(fs->endian, bmbt_rec->bw), rec.br_startoff, rec.br_startblock, rec.br_blockcount);
 
 
-//     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
+    return rec;
+}
+
+typedef xfs_off_t   xfs_dir2_off_t;
+typedef uint32_t    xfs_dir2_db_t;
+typedef uint        xfs_dir2_data_aoff_t;   /* argument form */
+
+static inline uint16_t get_unaligned_be16(const uint8_t *p)
+{
+    return p[0] << 8 | p[1];
+}
+
+static inline xfs_dir2_data_aoff_t
+xfs_dir2_sf_get_offset(xfs_dir2_sf_entry_t *sfep)
+{
+    return get_unaligned_be16(sfep->offset);
+}
+
+/*
+ * Convert block and offset to byte in space
+ */
+static inline xfs_dir2_off_t
+xfs_dir2_db_off_to_byte(XFS_INFO *xfs, xfs_dir2_db_t db,
+            xfs_dir2_data_aoff_t o)
+{
+    return ((xfs_dir2_off_t)db << xfs->fs->sb_blocklog) + o;
+}
+
+/*
+ * Convert byte in file space to dataptr.  It had better be aligned.
+ */
+static inline xfs_dir2_dataptr_t
+xfs_dir2_byte_to_dataptr(xfs_dir2_off_t by)
+{
+    return (xfs_dir2_dataptr_t)(by >> XFS_DIR2_DATA_ALIGN_LOG);
+}
 
 
-//     return offset;
-// }
+#define XFS_INO32_SIZE	4
+#define XFS_INO64_SIZE	8
+
+/*
+ * Shortform directory ops
+ */
+static int
+xfs_dir2_sf_entsize(
+	struct xfs_dir2_sf_hdr	*hdr,
+	int			len)
+{
+	int count = sizeof(struct xfs_dir2_sf_entry);	/* namelen + offset */
+
+	count += len;					/* name */
+	count += hdr->i8count ? XFS_INO64_SIZE : XFS_INO32_SIZE; /* ino # */
+	return count;
+}
+
+static int
+xfs_dir3_sf_entsize(
+	struct xfs_dir2_sf_hdr	*hdr,
+	int			len)
+{
+	return xfs_dir2_sf_entsize(hdr, len) + sizeof(uint8_t);
+}
+
+static struct xfs_dir2_sf_entry *
+xfs_dir2_sf_nextentry(
+	struct xfs_dir2_sf_hdr	*hdr,
+	struct xfs_dir2_sf_entry *sfep)
+{
+	return (struct xfs_dir2_sf_entry *)
+		((char *)sfep + xfs_dir2_sf_entsize(hdr, sfep->namelen));
+}
+
+static struct xfs_dir2_sf_entry *
+xfs_dir3_sf_nextentry(
+	struct xfs_dir2_sf_hdr	*hdr,
+	struct xfs_dir2_sf_entry *sfep)
+{
+	return (struct xfs_dir2_sf_entry *)
+		((char *)sfep + xfs_dir3_sf_entsize(hdr, sfep->namelen));
+}
+
+
+/*
+ * Convert block and offset to dataptr
+ */
+static inline xfs_dir2_dataptr_t
+xfs_dir2_db_off_to_dataptr(XFS_INFO *xfs, xfs_dir2_db_t db,
+               xfs_dir2_data_aoff_t o)
+{
+    return xfs_dir2_byte_to_dataptr(xfs_dir2_db_off_to_byte(xfs, db, o));
+}
+
 
 #endif
