@@ -372,54 +372,54 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     ssize_t len;
     ssize_t cnt;
 
-    if (fs_dir->fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM) {
-        cnt = len = XFS_CONTENT_LEN_V5(xfs);
-        memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
+    switch (fs_dir->fs_file->meta->content_type)
+    {
+        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM:
+            cnt = len = XFS_CONTENT_LEN_V5(xfs);    
+            memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
+            break;
 
-        retval_tmp =
-            xfs_dent_parse(xfs, fs_dir,
-            (fs_dir->fs_file->meta->
-                flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
-            dirbuf, len);
-
-        if (retval_tmp == TSK_ERR)
-            retval_final = TSK_ERR;
-        else if (retval_tmp == TSK_COR)
-            retval_final = TSK_COR;
-    }
-    else {
-        while (size > 0) {
+        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS:
             len = (a_fs->block_size < size) ? a_fs->block_size : size;
             cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
-                    
-            if (cnt != len) {
-                tsk_error_reset();
-                tsk_error_set_errno(TSK_ERR_FS_FWALK);
-                tsk_error_set_errstr
-                ("xfs_dir_open_meta: Error reading directory contents: %"
-                    PRIuINUM "\n", a_addr);
-                free(dirbuf);
-                return TSK_COR;
-            }
+            break;
 
-            retval_tmp =
-                xfs_dent_parse(xfs, fs_dir,
-                (fs_dir->fs_file->meta->
-                    flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
-                dirbuf, len);
+        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BTREE:
+            len = (a_fs->block_size < size) ? a_fs->block_size : size;
+            cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
+            break;
 
-            if (retval_tmp == TSK_ERR) {
-                retval_final = TSK_ERR;
-                break;
-            }
-            else if (retval_tmp == TSK_COR) {
-                retval_final = TSK_COR;
-            }
-
-            size -= len;
-            offset += len;
-        }
+        default:
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_FWALK);
+            tsk_error_set_errstr
+            ("xfs_dir_open_meta: Error reading directory contents: %"
+                PRIuINUM ", Unknown content type\n", a_addr);
+            free(dirbuf);
+            return TSK_COR;
+            break;
     }
+
+    if (cnt != len) {
+        tsk_error_reset();
+        tsk_error_set_errno(TSK_ERR_FS_FWALK);
+        tsk_error_set_errstr
+        ("xfs_dir_open_meta: Error reading directory contents: %"
+            PRIuINUM "\n", a_addr);
+        free(dirbuf);
+        return TSK_COR;
+    }
+
+    retval_tmp =
+        xfs_dent_parse(xfs, fs_dir,
+        (fs_dir->fs_file->meta->
+            flags & TSK_FS_META_FLAG_UNALLOC) ? 1 : 0, &list_seen,
+        dirbuf, len);
+
+    if (retval_tmp == TSK_ERR)
+        retval_final = TSK_ERR;
+    else if (retval_tmp == TSK_COR)
+        retval_final = TSK_COR;
 
     free(dirbuf);
 
