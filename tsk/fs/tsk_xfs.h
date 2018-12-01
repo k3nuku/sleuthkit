@@ -23,6 +23,7 @@ typedef uint32_t    xfs_dir2_dataptr_t;
     (tsk_getu32(&(fs->endian), ((s)->sb_agcount)) - 1) * \
      tsk_getu32(&(fs->endian), (s)->sb_agblocks) + XFS_MIN_AG_BLOCKS)
 
+#define XFS_MAXNAMELEN 255
 
 #define XFS_INODE_CORE_SIZE_VER4 96
 #define XFS_INODE_CORE_SIZE_VER5 176
