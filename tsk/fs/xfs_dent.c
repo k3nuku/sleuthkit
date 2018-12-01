@@ -121,11 +121,13 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     for (int i = 0; i < num_entries; i++)
     {
         dir2_sf->entry = ent;
-        
+        namelen = ent->namelen;
+        inode = xfs_dir2_sf_get_ino(hdr, ent);
         if(inode > fs->last_inum ||
             namelen > XFS_MAXNAMELEN ||
             namelen == 0){
-            fprintf(stderr, "xfs_dent.c:%d ->xfs_dent_parse_shortform: Invalid inode.\n",__LINE__);
+            fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d\n", __LINE__, inode, namelen, fs->last_inum);
+            //fprintf(stderr, "xfs_dent.c:%d ->xfs_dent_parse_shortform: Invalid inode.\n",__LINE__);
         }
 
         if (xfs_dent_copy(xfs, dir2_sf, fs_name)) {
@@ -361,11 +363,10 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
         ssize_t cnt;
         if(fs_dir->fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM){
             /// if short form - case of only diretory
-            len = XFS_CONTENT_LEN_V5(xfs);
-            cnt = tsk_fs_read(a_fs, fs_dir->fs_file->meta->content_ptr, dirbuf, XFS_CONTENT_LEN_V5(xfs));
-            if(cnt != len){
-                fprintf(stderr, "xfs_dent.c:%d ");
-            }
+            cnt = len = XFS_CONTENT_LEN_V5(xfs);
+            memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
+            //if(cnt != len){
+            //     fprintf(stderr, "xfs_dent.c:%d  invalid datafork read size : cnt : %d   con_len : %d\n", __LINE__);            }
         }
         else{
             len = (a_fs->block_size < size) ? a_fs->block_size : size;

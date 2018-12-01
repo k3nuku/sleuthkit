@@ -178,6 +178,7 @@ tsk_fs_dir_contains(TSK_FS_DIR * a_fs_dir, TSK_INUM_T meta_addr, uint32_t hash)
 static void 
 tsk_fs_dir_free_name_internal(TSK_FS_NAME *fs_name) 
 {
+    fprintf(stderr, "tsk_fs_dir_free_name_internal called.\n");
     if (fs_name->name) {
 	    free(fs_name->name);
 	    fs_name->name = NULL;
@@ -188,6 +189,7 @@ tsk_fs_dir_free_name_internal(TSK_FS_NAME *fs_name)
         fs_name->shrt_name = NULL;
         fs_name->shrt_name_size = 0;
     }
+    fprintf(stderr, "tsk_fs_dir_free_name_internal passed.\n");
 }
 
 
@@ -202,6 +204,7 @@ tsk_fs_dir_free_name_internal(TSK_FS_NAME *fs_name)
 uint8_t
 tsk_fs_dir_add(TSK_FS_DIR * a_fs_dir, const TSK_FS_NAME * a_fs_name)
 {
+    fprintf(stderr, "tsk_fs_dir_add called.\n");
     TSK_FS_NAME *fs_name_dest = NULL;
     size_t i;
 
@@ -242,7 +245,7 @@ tsk_fs_dir_add(TSK_FS_DIR * a_fs_dir, const TSK_FS_NAME * a_fs_name)
             }
         }
     }
-
+    
     if (fs_name_dest == NULL) {
         // make sure we got the room
         if (a_fs_dir->names_used >= a_fs_dir->names_alloc) {
@@ -261,7 +264,7 @@ tsk_fs_dir_add(TSK_FS_DIR * a_fs_dir, const TSK_FS_NAME * a_fs_name)
         fs_name_dest->par_addr = a_fs_dir->addr;
         fs_name_dest->par_seq = a_fs_dir->seq;
     }
-
+    fprintf(stderr, "tsk_fs_dir_add passed.\n");
     return 0;
 }
 

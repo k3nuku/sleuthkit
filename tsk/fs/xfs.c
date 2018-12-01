@@ -653,33 +653,28 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     
     // content_ptr에 data fork 영역 할당
     // inode core 이후의 content 영역을 format에 맞게 content ptr에 복사해야함
-    TSK_OFF_T inooffset = xfs_inode_get_offset(xfs, inum);
-    //fs_meta->content_ptr = inooffset + sizeof(xfs_dinode);
-    fprintf(stderr,"\txfs.c:%d  |  di_format : %d\n", __LINE__, dino_buf->di_format);
+    TSK_OFF_T dfork_offset = xfs_inode_get_offset(xfs, inum) + sizeof(xfs_dinode);
+    
+    char* content_buf = (char*)tsk_malloc(XFS_CONTENT_LEN_V5(xfs));
+    ssize_t cnt = tsk_fs_read(fs, dfork_offset, content_buf, XFS_CONTENT_LEN_V5(xfs));
+    if(cnt != XFS_CONTENT_LEN_V5(xfs)){
+        fprintf(stderr, "invalid datafork read size : cnt : %d   con_len : %d\n", cnt, XFS_CONTENT_LEN_V5(xfs));
+        return -1;
+    }else{
+
+        for(int i = 0 ; i < XFS_CONTENT_LEN_V5(xfs) ; i++){
+            fprintf(stderr, "%2x ", (uint8_t)content_buf[i]);
+            if(i % 16 == 15)
+                fprintf(stderr, "\n");
+        }
+        fprintf(stderr, "\n");
+    }
+
+    fs_meta->content_ptr = (void*) content_buf;
+
+    //fprintf(stderr,"\txfs.c:%d  |  di_format : %d\n", __LINE__, dino_buf->di_format);
     if (dino_buf->di_format == 1){
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM;  
-        
-        TSK_OFF_T off = inooffset + sizeof(xfs_dinode);     // data fork 까지 이동
-        //off = inooffset + 4; // remove 'ffff' of inode offset B0~B4
-    
-        //uint32_t *addr_ptr = (uint32_t *) fs_meta->content_ptr;
-        
-        // uint32_t size = tsk_getu16(fs->endian, sb->sb_inodesize) - 0xb0;
-
-        // uint8_t * buf = (uint8_t*)tsk_malloc(size);
-
-        // uint32_t count = tsk_fs_read(fs, off, buf, size);
-        
-        // fprintf(stderr, "sibal2 : %d", fs->endian);
-        // fprintf(stderr, "inode size : %d\n", tsk_getu16(fs->endian, sb->sb_inodesize));
-        // fprintf(stderr, "count      : %d, sizeof buf      : %d\n", count, size);
-        // for(int i = 0 ; i < size; i++){
-        //     fprintf(stderr, "%lx ", buf[i]);
-        //     if(i%16 == 15)
-        //         fprintf(stderr, "\n");
-        // }
-        // fprintf(stderr, "\n");
-
     }
     else if (dino_buf->di_format == 2){
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BLOCK;
@@ -690,8 +685,8 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     else{
         fprintf(stderr, "xfs : inode core format not supported : inode format %d\n", dino_buf->di_format);
     } 
-    fs_meta->content_ptr = inooffset + sizeof(xfs_dinode);
-    fprintf(stderr, "ino : %d  |  content_ptr : %lx\n", inum, (TSK_OFF_T) fs_meta->content_ptr);
+    //fs_meta->content_ptr = inooffset + sizeof(xfs_dinode);
+    //fprintf(stderr, "ino : %d  |  content_ptr : %lx\n", inum, (TSK_OFF_T) fs_meta->content_ptr);
 
 
 
@@ -1059,7 +1054,7 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     */
 
     fs->inum_count = tsk_getu64(fs->endian, xfs->fs->sb_icount);
-    fs->last_inum = fs->inum_count;
+    fs->last_inum = 0xFFFFFFFFFFFFFFFF;
     fs->first_inum = XFS_FIRSTINO;
     fs->root_inum = tsk_getu64(fs->endian, xfs->fs->sb_rootino);
     
