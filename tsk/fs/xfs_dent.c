@@ -31,15 +31,18 @@ xfs_dir3_data_get_ftype(
 }
 
 static uint8_t
-xfs_dent_copy(XFS_INFO * xfs, xfs_dir2_sf_hdr_t * hdr,
+xfs_dent_copy(XFS_INFO * xfs,
     char *xfs_dent, TSK_FS_NAME * fs_name)
 {
     fprintf(stderr, ">> xfs_dent_copy called.\n");
     
     TSK_FS_INFO *fs = &(xfs->fs_info);
+    // if format 1 (short form)
     
-    xfs_dir2_sf_entry_t * ent = (xfs_dir2_sf_entry_t*) xfs_dent;
-    
+    xfs_dir2_sf_t * dir2_sf = (xfs_dir2_sf_t*) xfs_dent;
+    xfs_dir2_sf_hdr_t * hdr = (xfs_dir2_sf_hdr_t*) dir2_sf->hdr;
+    xfs_dir2_sf_entry_t * ent = (xfs_dir2_sf_entry_t*) dir2_sf->entry;
+
     fs_name->meta_addr = (TSK_INUM_T)xfs_dir3_sfe_get_ino(hdr, ent);
     
     if(ent->namelen >= fs_name->name_size){
@@ -94,16 +97,20 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
     TSK_FS_INFO *fs = &(xfs->fs_info);
-    //char * dirPtr;
+    
     TSK_FS_NAME * fs_name;
     xfs_dir2_sf_hdr_t *hdr;
     xfs_dir2_sf_entry_t *ent; 
-
+    
+    // dir2_sf = dir2_sf header + dir2_sf entry => to calculate inode offset in dent_copy 
+    xfs_dir2_sf_t * dir2_sf = (xfs_dir2_sf_t *)tsk_malloc(sizeof(xfs_dir2_sf_t));
+    hdr = (xfs_dir2_sf_hdr_t*)buf;
+    dir2_sf->hdr = hdr;   
+    
     uint8_t ftype;
     uint8_t namelen;
     uint64_t inode;
-    hdr = (xfs_dir2_sf_hdr_t*)buf;
-
+    
     if ((fs_name = tsk_fs_name_alloc(XFS_MAXNAMELEN + 1, 0)) == NULL)
         return TSK_ERR;
 
@@ -113,29 +120,19 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
 
     for (int i = 0; i < num_entries; i++)
     {
-        char *name = (char*)tsk_malloc(sizeof(char) * (ent->namelen + 1));
-        memcpy(name, ent->name, ent->namelen);
-        name[ent->namelen] = '\0';
+        dir2_sf->entry = ent;
         
-        uint8_t ftype = xfs_dir3_sfe_get_ftype(ent);
-        namelen = ent->namelen;
-        //eoffset = tsk_getu16(xfs->fs_info.endian, entry->offset);
-        //filename = entry->name;
-        //filetype = xfs_dir3_sfe_get_ftype(entry);
-        inode = xfs_dir3_sfe_get_ino(hdr, ent);
-
         if(inode > fs->last_inum ||
             namelen > XFS_MAXNAMELEN ||
             namelen == 0){
             fprintf(stderr, "xfs_dent.c:%d ->xfs_dent_parse_shortform: Invalid inode.\n",__LINE__);
         }
 
-
-        //if (xfs_dent_copy(xfs, dirPtr, fs_name)) {
-        if (xfs_dent_copy(xfs, hdr,(char*)ent, fs_name)) {
+        if (xfs_dent_copy(xfs, dir2_sf, fs_name)) {
             tsk_fs_name_free(fs_name);
             return TSK_ERR;
         }
+
         fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
         /* Do we have a deleted entry? */
         

@@ -628,6 +628,11 @@ typedef struct xfs_dir2_sf_entry {
      */
 } xfs_dir2_sf_entry_t;
 
+typedef struct xfs_dir2_sf {
+    xfs_dir2_sf_hdr_t *hdr;
+    xfs_dir2_sf_entry_t *entry;
+} xfs_dir2_sf_t;
+
 static inline uint32_t get_unaligned_be32(const uint8_t *p)
 {
 	return p[0] << 24 | p[1] << 16 | p[2] << 8 | p[3];
