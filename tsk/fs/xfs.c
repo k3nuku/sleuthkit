@@ -12,7 +12,6 @@
 #include "tsk_fs_i.h"
 #include "tsk_xfs.h"
 
-
 static int
 xfs_mount_validate_sb(
     TSK_FS_INFO* fs, xfs_sb *sbp)
@@ -362,9 +361,12 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
 
     // deserialize irec->br_startblock to AG number and block number
     uint32_t agno = XFS_FSB_TO_AGNO(xfs, irec->br_startblock);
-    uint32_t blkno = XFS_FSB_TO_AGBNO(xfs, irec->br_startblock);
+    uint32_t agblkno = XFS_FSB_TO_AGBNO(xfs, irec->br_startblock);
 
-    TSK_OFF_T soff = (agno * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_agblocks) + blkno)
+    fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - agno: %d, agblkno: %d, aglen: %d\n",
+        __LINE__, agno, agblkno, irec->br_blockcount);
+
+    TSK_OFF_T soff = (agno * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_agblocks) + agblkno)
         * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize); // real offset
 
     fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - offset: %lu\n",
@@ -405,6 +407,9 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
 
         fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - filename: %s, inode: %lx, namelen: %d, tag: %d\n",
             __LINE__, name, inum, namelen, ftype, tag);
+
+        files_found++;
+        fprintf(stderr, "files found: %d\n", files_found);
 
         if (ftype == 1)
         {

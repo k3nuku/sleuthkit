@@ -1,6 +1,8 @@
 #include "tsk_fs_i.h"
 #include "tsk_xfs.h"
 
+static int files_found = 0;
+
 static int
 xfs_dir2_data_entsize(
     int         n)
@@ -145,6 +147,9 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
 
         fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d | name : %s\n", __LINE__,
             inode, namelen, fs->last_inum, name);
+
+        files_found++;
+        fprintf(stderr, "files found: %d\n", files_found);
 
         if (xfs_dent_copy(xfs, dir2_sf, fs_name)) {
             tsk_fs_name_free(fs_name);

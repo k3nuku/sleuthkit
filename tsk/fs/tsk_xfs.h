@@ -8,6 +8,8 @@
 extern "C" {
 #endif
 
+static int files_found;
+
 typedef int64_t           xfs_off_t;  /* <file offset> type */
 typedef uint32_t  xfs_rfsblock_t; /* blockno in filesystem (raw) */
 typedef uint64_t XFS_AGNUM_T;
