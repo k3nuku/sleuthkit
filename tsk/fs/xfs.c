@@ -235,39 +235,31 @@ xfs_make_data_run_extent(TSK_FS_INFO * fs_info, TSK_FS_ATTR * fs_attr,
     xfs_bmbt_rec_t* extent)
 {
     fprintf(stderr,"[i] xfs_make_data_run_extent:  - LINE : xfs_make_data_run_extent called\n");
+
     TSK_FS_ATTR_RUN *data_run;
     XFS_INFO * xfs = (XFS_INFO *)fs_info;
-    data_run = tsk_fs_attr_run_alloc();
-    if (data_run == NULL) {
+
+    if ((data_run = tsk_fs_attr_run_alloc()) == NULL)
         return 1;
-    }
-    fprintf(stderr, " >>>> l0 : %ld  |  l1: %ld\n", tsk_getu64(fs_info->endian, extent->l0), tsk_getu64(fs_info->endian, extent->l1));
-    xfs_bmbt_irec_t *irec = (xfs_bmbt_irec_t*)tsk_malloc(sizeof(xfs_bmbt_irec_t));
     
+    //fprintf(stderr, " >>>> l0 : %ld  |  l1: %ld\n", tsk_getu64(fs_info->endian, extent->l0), tsk_getu64(fs_info->endian, extent->l1));
+    xfs_bmbt_irec_t *irec = (xfs_bmbt_irec_t*)tsk_malloc(sizeof(xfs_bmbt_irec_t));
     xfs_bmbt_disk_get_all(xfs, extent, irec);
-    fprintf(stderr, "[i] xfs_make_data_run_extent:%d  start block : %ld, block count %ld\n", __LINE__, irec->br_startblock, irec->br_blockcount);
     
     uint32_t agno =  XFS_FSB_TO_AGNO(xfs, irec->br_startblock);
     uint32_t blkno = XFS_FSB_TO_AGBNO(xfs, irec->br_startblock);
-    
-    fprintf(stderr, "[i] xfs_make_data_run_extent:%d  agno : %ld, blkno : %ld\n", __LINE__, agno, blkno);
-    
-    TSK_OFF_T soff = (agno * tsk_getu32(fs_info->endian, xfs->fs->sb_agblocks) + blkno); // real offset
-    
-    fprintf(stderr, "[i] xfs_make_data_run_extent:%d  soff : %lld\n", __LINE__, soff);
-    
-    //struct xfs_bmbt_irec ir = xfs_extent_get_offset(xfs, extent);
 
-    //fprintf(stderr, "[i] xfs_make_data_run_extent:%d  sibal irec : %ld  bcount : %lld\n",__LINE__, ir.br_startblock, ir.br_blockcount);
     data_run->offset = 0;
-    data_run->addr = soff;
+    data_run->addr = agno * tsk_getu32(fs_info->endian, xfs->fs->sb_agblocks) + blkno;
     data_run->len = irec->br_blockcount;
-    fprintf(stderr, "data_run->addr : %ld    len : %ld\n", data_run->addr, data_run->len);
-    // save the run
+
+    fprintf(stderr, "[i] xfs_make_data_run_extent:%d  run_agno : %ld, run_blkno : %ld, run_soff: %lu\n",
+        __LINE__, agno, blkno, data_run->addr);
 
     if (tsk_fs_attr_add_run(fs_info, fs_attr, data_run)) {
         return 1;
     }
+
     fprintf(stderr,"[i] xfs_make_data_run_extent:  - LINE : xfs_make_data_run_extent passed\n");
     return 0;
 }
@@ -334,13 +326,15 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
         else
             fprintf(stderr, "%2x ", rec->l1[i-8]);
     }
-    //fprintf(stderr, "\n");
+    fprintf(stderr, "\n");
     //fprintf(stderr,">>>>> rec->l0 : %d   rec->l1 : %ld\n", tsk_getu64(fs_info->endian, rec->l0), tsk_getu64(fs_info->endian, rec->l1));
       
     if ((fs_meta->attr != NULL)
         && (fs_meta->attr_state == TSK_FS_META_ATTR_STUDIED)) {
+        fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - already studied, exiting load_attr_blk\n", __LINE__);
         return 0;
     }else if (fs_meta->attr_state == TSK_FS_META_ATTR_ERROR) {
+        fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - error on attr, exiting load_attr_blk\n", __LINE__);
         return 1;
     }
     //fprintf(stderr, "sibal1\n");
@@ -386,8 +380,8 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
                 __LINE__);
             return 1;
         }
+
         rec = xfs_dir2_data_nextentry(rec);
-    
     }
     
     fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
@@ -411,11 +405,20 @@ xfs_load_attrs(TSK_FS_FILE * fs_file)
 
     // not needed to implement about shortform data fork. shortform does not have location of real file.
     if(fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS)
+    {
+        fprintf(stderr, "contenttype = fork extent\n");
         xfs_load_attrs_block(fs_file);
+    }
     else if(fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BTREE)
+    {
+        fprintf(stderr, "contenttype = btree fork\n");
         return 1;
+    }
     else
+    {
+        fprintf(stderr, "contenttype = unknown content type\n");
         return 1;
+    }
 
     return 0;
 }
@@ -425,8 +428,6 @@ static uint8_t
 xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
     xfs_dinode * dino_buf)
 {
-    //fprintf(stderr, "[e] xfs_inode_load called. inode : %d\n", dino_inum);
-    //EXT2_GRPNUM_T grp_num;
     TSK_OFF_T addr;
     ssize_t cnt;
     TSK_INUM_T rel_inum;
@@ -451,38 +452,11 @@ xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
         return 1;
     }
 
-    uint8_t sb_agblklog = xfs->fs->sb_agblklog;
-    uint8_t sb_inopblog = xfs->fs->sb_inopblog;
-    //fprintf(stderr, "agblklog : %d, inopblocklog :%d\n", sb_agblklog, sb_inopblog);
-
-    /* lock access to grp_buf */
-    tsk_take_lock(&xfs->lock);
-
-    uint32_t ag_num = dino_inum >> (sb_agblklog + sb_inopblog);
-    uint32_t blk_num = (dino_inum - (ag_num << (sb_agblklog + sb_inopblog))) >> sb_inopblog;
-    uint32_t sec_num = ( dino_inum - (ag_num << (sb_agblklog + sb_inopblog)) 
-                    - (blk_num << sb_inopblog) );
-
-    //fprintf(stderr, "inode num  : %d\n", dino_inum);
-    //fprintf(stderr, "block size : %d\n", tsk_getu32(fs->endian, xfs->fs->sb_blocksize));
-    //fprintf(stderr, "AG num     : %d\n", ag_num);
-    //fprintf(stderr, "Blk num    : %d\n", blk_num);
-    //fprintf(stderr, "Sec num    : %d\n", sec_num);
-
-
-    tsk_release_lock(&xfs->lock);
-    // sb_agblocks = ag size
-    //TSK_OFF_T ag_offset = ag_num * (tsk_getu32(fs->endian, xfs->fs->sb_agblocks) * tsk_getu32(fs->endian, xfs->fs->sb_blocksize));
-    //TSK_OFF_T blk_offset = blk_num * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
-    //TSK_OFF_T sec_offset = sec_num * tsk_getu16(fs->endian, xfs->fs->sb_sectsize);
+    addr = xfs_inode_get_offset(xfs, dino_inum);
+    cnt = tsk_fs_read(fs, addr, (char *)dino_buf, xfs->inode_size);
     
-    addr = xfs_inode_get_offset(xfs, dino_inum);  
+    fprintf(stderr, "calculated inode offset  : %lx, inode read: %lu\n", addr, cnt);
 
-    //fprintf(stderr, "calculated offset1  : %d\n", addr);
-    fprintf(stderr, "calculated inode offset  : %d\n", xfs_inode_get_offset(xfs, dino_inum));
-
-    cnt = tsk_fs_read(fs, addr, (char *) dino_buf, xfs->inode_size);
-    
     if (cnt != xfs->inode_size) {
         if (cnt >= 0) {
             tsk_error_reset();
@@ -492,30 +466,7 @@ xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
             " from %" PRIuOFF, dino_inum, addr);
         return 1;
     }
-//DEBUG    printf("Inode Size: %d, %d, %d, %d\n", sizeof(ext2fs_inode), *ext2fs->fs->s_inode_size, ext2fs->inode_size, *ext2fs->fs->s_want_extra_isize);
-//DEBUG    debug_print_buf((char *)dino_buf, ext2fs->inode_size);
-    /*
-    if (tsk_verbose) {
-        tsk_fprintf(stderr,
-            "%" PRIuINUM " m/l/s=%o/%d/%" PRIuOFF
-            " u/g=%d/%d macd=%" PRIu32 "/%" PRIu32 "/%" PRIu32 "/%" PRIu32
-            "\n", dino_inum, tsk_getu16(fs->endian, dino_buf->di_mode),
-            tsk_getu32(fs->endian, dino_buf->di_nlink),
-            (tsk_getu64(fs->endian,
-                    dino_buf->di_size) + (tsk_getu16(fs->endian,
-                        dino_buf->di_mode) & XFS_IN_REG) ? (uint64_t)
-                tsk_getu32(fs->endian, dino_buf->i_size_high) << 32 : 0),
-            tsk_getu16(fs->endian,
-                dino_buf->i_uid) + (tsk_getu16(fs->endian,
-                    dino_buf->i_uid_high) << 16), tsk_getu16(fs->endian,
-                dino_buf->i_gid) + (tsk_getu16(fs->endian,
-                    dino_buf->i_gid_high) << 16), tsk_getu32(fs->endian,
-                dino_buf->i_mtime), tsk_getu32(fs->endian,
-                dino_buf->i_atime), tsk_getu32(fs->endian,
-                dino_buf->i_ctime), tsk_getu32(fs->endian,
-                dino_buf->i_dtime));
-    }
-    */
+
     return 0;
 }
 
@@ -529,13 +480,6 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
     xfs_sb *sb = xfs->fs;
     TSK_INUM_T ibase = 0;
-
-    //xfs_bmbt_rec_t * extent = tsk_malloc(sizeof(xfs_bmbt_rec_t));
-    //20 01 60 00 01
-    
-    //xfs_bmbt_irec_t temp = xfs_extent_get_offset(xfs, extent);
-    //fprintf(stderr, "start_off : %lx  |  block num : %lx  | block count : %lx\n", temp.br_startoff, temp.br_startblock, temp.br_blockcount);
-
 
     if (dino_buf == NULL) {
         tsk_error_reset();
@@ -551,30 +495,30 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
 
     // set the type
     switch (tsk_getu16(fs->endian, dino_buf->di_mode) & XFS_IN_FMT) {
-    case XFS_IN_REG:
-        fs_meta->type = TSK_FS_META_TYPE_REG;
-        break;
-    case XFS_IN_DIR:
-        fs_meta->type = TSK_FS_META_TYPE_DIR;
-        break;
-    case XFS_IN_SOCK:
-        fs_meta->type = TSK_FS_META_TYPE_SOCK;
-        break;
-    case XFS_IN_LNK:
-        fs_meta->type = TSK_FS_META_TYPE_LNK;
-        break;
-    case XFS_IN_BLK:
-        fs_meta->type = TSK_FS_META_TYPE_BLK;
-        break;
-    case XFS_IN_CHR:
-        fs_meta->type = TSK_FS_META_TYPE_CHR;
-        break;
-    case XFS_IN_FIFO:
-        fs_meta->type = TSK_FS_META_TYPE_FIFO;
-        break;
-    default:
-        fs_meta->type = TSK_FS_META_TYPE_UNDEF;
-        break;
+        case XFS_IN_REG:
+            fs_meta->type = TSK_FS_META_TYPE_REG;
+            break;
+        case XFS_IN_DIR:
+            fs_meta->type = TSK_FS_META_TYPE_DIR;
+            break;
+        case XFS_IN_SOCK:
+            fs_meta->type = TSK_FS_META_TYPE_SOCK;
+            break;
+        case XFS_IN_LNK:
+            fs_meta->type = TSK_FS_META_TYPE_LNK;
+            break;
+        case XFS_IN_BLK:
+            fs_meta->type = TSK_FS_META_TYPE_BLK;
+            break;
+        case XFS_IN_CHR:
+            fs_meta->type = TSK_FS_META_TYPE_CHR;
+            break;
+        case XFS_IN_FIFO:
+            fs_meta->type = TSK_FS_META_TYPE_FIFO;
+            break;
+        default:
+            fs_meta->type = TSK_FS_META_TYPE_UNDEF;
+            break;
     }
 
     // set the mode
@@ -608,9 +552,7 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
         fs_meta->mode |= TSK_FS_META_MODE_IXOTH;
 
     fs_meta->nlink = tsk_getu32(fs->endian, dino_buf->di_nlink);
-
     fs_meta->size = tsk_getu64(fs->endian, dino_buf->di_size);
-
     fs_meta->addr = inum;
 
     /* the general size value in the inode is only 32-bits,
@@ -628,13 +570,9 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     fs_meta->atime = dino_buf->di_atime.t_sec;
     fs_meta->ctime = dino_buf->di_ctime.t_sec;
 
-
-    fs_meta->mtime_nano = dino_buf->di_mtime.t_nsec;
-            
+    fs_meta->mtime_nano = dino_buf->di_mtime.t_nsec;            
     fs_meta->atime_nano = dino_buf->di_atime.t_nsec;
-          
     fs_meta->ctime_nano = dino_buf->di_ctime.t_nsec;
-            
     fs_meta->seq = 0;
 
     if (fs_meta->link) {
@@ -657,45 +595,30 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     
     char* content_buf = (char*)tsk_malloc(XFS_CONTENT_LEN_V5(xfs));
     ssize_t cnt = tsk_fs_read(fs, dfork_offset, content_buf, XFS_CONTENT_LEN_V5(xfs));
+
     if (cnt != XFS_CONTENT_LEN_V5(xfs)){
         fprintf(stderr, "invalid datafork read size : cnt : %d   con_len : %d\n", cnt, XFS_CONTENT_LEN_V5(xfs));
         return -1;
     }
-    else {
-        fprintf(stderr, "[i] dinode_copy: xfs.c: %d - datafork read %dbytes from dinode\n", cnt);
-
-        /*for(int i = 0 ; i < XFS_CONTENT_LEN_V5(xfs) ; i++){
-            fprintf(stderr, "%2x ", (uint8_t)content_buf[i]);
-            if(i % 16 == 15)
-                fprintf(stderr, "\n");
-        }
-        fprintf(stderr, "\n");*/
-    }
 
     fs_meta->content_ptr = (void*) content_buf;
 
-    //fprintf(stderr,"\txfs.c:%d  |  di_format : %d\n", __LINE__, dino_buf->di_format);
-    if (dino_buf->di_format == 1){
+    if (dino_buf->di_format == XFS_DINODE_FMT_LOCAL){
         fprintf(stderr, "[S] dinode_copy: xfs.c: %d - shortform type detected\n", __LINE__);
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM;  
     }
-    else if (dino_buf->di_format == 2){
+    else if (dino_buf->di_format == XFS_DINODE_FMT_EXTENTS){
         fprintf(stderr, "[B] dinode_copy: xfs.c: %d - block type detected\n", __LINE__);
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS;
     }
-    else if (dino_buf->di_format == 3){
+    else if (dino_buf->di_format == XFS_DINODE_FMT_BTREE){
         fprintf(stderr, "[L] dinode_copy: xfs.c: %d - leaf type detected\n", __LINE__);
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BTREE;
     }
     else{
         fprintf(stderr, "xfs : inode core format not supported : inode format %d\n", dino_buf->di_format);
     } 
-    //fs_meta->content_ptr = inooffset + sizeof(xfs_dinode);
-    //fprintf(stderr, "ino : %d  |  content_ptr : %lx\n", inum, (TSK_OFF_T) fs_meta->content_ptr);
 
-
-
-    //fprintf(stderr, "xfs_inode_copy passed.\n");
     return 0;
 }    
 
@@ -787,7 +710,6 @@ static uint8_t
 xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
     TSK_INUM_T inum)
 {
-    fprintf(stderr, "xfs_inode_lookup called.\n");
     XFS_INFO * xfs = (XFS_INFO *) fs;
     xfs_dinode * dino_buf = NULL;
     unsigned int size = 0;
@@ -797,10 +719,8 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
         tsk_error_set_errstr("ext2fs_inode_lookup: fs_file is NULL");
         return 1;
     }
-    //fprintf(stderr, "here1\n");
+
     if (a_fs_file->meta == NULL) {
-        //uint64_t content_len;
-        //xfs->fs->             
         if ((a_fs_file->meta =      
                 tsk_fs_meta_alloc(XFS_CONTENT_LEN_V5(xfs))) == NULL) // #define XFS_CONTENT_LEN 
             return 1;
@@ -808,7 +728,7 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
     else {
         tsk_fs_meta_reset(a_fs_file->meta);
     }
-    //fprintf(stderr, "here2\n");
+
     // see if they are looking for the special "orphans" directory
     if (inum == TSK_FS_ORPHANDIR_INUM(fs)) {
         if (tsk_fs_dir_make_orphan_dir_meta(fs, a_fs_file->meta))
@@ -821,19 +741,21 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
         xfs->inode_size > 
         sizeof(xfs_dinode) ? xfs->inode_size : sizeof(xfs_dinode);
     fprintf(stderr, "size of inode : %d\n", size);
+
     if((dino_buf = (xfs_dinode *)tsk_malloc(size)) == NULL){
         return 1;
     }
-    //fprintf(stderr, "here3\n");
-    // dinode -> 
-    if(xfs_dinode_load(xfs, inum, dino_buf)){
+
+    if (xfs_dinode_load(xfs, inum, dino_buf)){
         free(dino_buf);
         return 1;
     }
-    if(xfs_dinode_copy(xfs, a_fs_file->meta, inum, dino_buf)){
+
+    if (xfs_dinode_copy(xfs, a_fs_file->meta, inum, dino_buf)){
         free(dino_buf);
         return 1;
     }
+
     free(dino_buf);
     fprintf(stderr, "xfs_inode_lookup passed.\n");
     return 0;

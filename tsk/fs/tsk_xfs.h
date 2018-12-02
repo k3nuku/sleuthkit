@@ -1318,7 +1318,7 @@ xfs_dir3_blockentry_get_tag(
 
 static inline 
 TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
-    fprintf(stderr, "xfs_inode_get_offset called. inode num : %d\n", a_addr);
+    fprintf(stderr, "xfs_inode_get_offset called. inode num : %lx\n", a_addr);
 
     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
     TSK_OFF_T offset_block;
@@ -1328,34 +1328,25 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
 
     /* lock access to grp_buf */
     tsk_take_lock(&xfs->lock);
-    //fprintf(stderr, "after lock\n");
 
     uint32_t ag_num = a_addr >> (sb_agblklog + sb_inopblog);
     uint32_t blk_num = (a_addr - (ag_num << (sb_agblklog + sb_inopblog))) >> sb_inopblog;
-    uint32_t sec_num = ( a_addr - (ag_num << (sb_agblklog + sb_inopblog)) 
-                    - (blk_num << sb_inopblog) );
+    uint32_t sec_num = (a_addr - (ag_num << (sb_agblklog + sb_inopblog)) - (blk_num << sb_inopblog));
 
-    // fprintf(stderr, "inode num : %d\n", a_addr);
-    // fprintf(stderr, "AG num    : %d\n", ag_num);
-    // fprintf(stderr, "Blk num   : %d\n", blk_num);
-    // fprintf(stderr, "Sec num   : %d\n", sec_num);
+    // fprintf(stderr, "inode num : %lx\n", a_addr);
+    // fprintf(stderr, "AG num    : %lx\n", ag_num);
+    // fprintf(stderr, "Block num : %lu\n", blk_num);
+    // fprintf(stderr, "Seq num   : %lu\n", sec_num);
 
     tsk_release_lock(&xfs->lock);
-    //fprintf(stderr, "after unlock\n");
 
     // sb_agblocks = ag size
     TSK_OFF_T ag_offset = ag_num * (tsk_getu32(fs->endian, xfs->fs->sb_agblocks) * tsk_getu32(fs->endian, xfs->fs->sb_blocksize));
-    
-    //fprintf(stderr, "after 1\n");
     TSK_OFF_T blk_offset = blk_num * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
-    
-    //fprintf(stderr, "after 2\n");
     TSK_OFF_T sec_offset = sec_num * tsk_getu16(fs->endian, xfs->fs->sb_sectsize);
     
-    //fprintf(stderr, "after 3\n");
     offset = ag_offset + blk_offset + sec_offset;
-    //offset_block = ag_offset + blk_offset + sec_offset;  
-    //offset = offset_block * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
+
     return offset;
 }
 
