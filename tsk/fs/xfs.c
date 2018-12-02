@@ -207,33 +207,68 @@ xfs_mount_validate_sb(
     return 0;
 }
 
+void
+xfs_bmbt_disk_get_all(
+    XFS_INFO* xfs,
+    struct xfs_bmbt_rec *rec,
+    struct xfs_bmbt_irec    *irec)
+{
+    uint64_t        l0 = tsk_getu64(xfs->fs_info.endian, rec->l0);
+    uint64_t        l1 = tsk_getu64(xfs->fs_info.endian, rec->l1);
+
+    irec->br_startoff = (l0 & xfs_mask64lo(64 - BMBT_EXNTFLAG_BITLEN)) >> 9;
+    irec->br_startblock = ((l0 & xfs_mask64lo(9)) << 43) | (l1 >> 21);
+    irec->br_blockcount = l1 & xfs_mask64lo(21);
+
+    if (l0 >> (64 - BMBT_EXNTFLAG_BITLEN))
+        irec->br_state = XFS_EXT_UNWRITTEN;
+    else
+        irec->br_state = XFS_EXT_NORM;
+}
+
 /** \internal
  * Add a single extent -- that is, a single data ran -- to the file data attribute.
  * @return 0 on success, 1 on error.
  */
 static TSK_OFF_T
 xfs_make_data_run_extent(TSK_FS_INFO * fs_info, TSK_FS_ATTR * fs_attr,
-    char * name, uint8_t ftype, TSK_INUM_T inum)
+    xfs_bmbt_rec_t* extent)
 {
+    fprintf(stderr,"[i] xfs_make_data_run_extent:  - LINE : xfs_make_data_run_extent called\n");
     TSK_FS_ATTR_RUN *data_run;
     XFS_INFO * xfs = (XFS_INFO *)fs_info;
     data_run = tsk_fs_attr_run_alloc();
-
     if (data_run == NULL) {
         return 1;
     }
+    fprintf(stderr, " >>>> l0 : %ld  |  l1: %ld\n", tsk_getu64(fs_info->endian, extent->l0), tsk_getu64(fs_info->endian, extent->l1));
+    xfs_bmbt_irec_t *irec = (xfs_bmbt_irec_t*)tsk_malloc(sizeof(xfs_bmbt_irec_t));
+    
+    xfs_bmbt_disk_get_all(xfs, extent, irec);
+    fprintf(stderr, "[i] xfs_make_data_run_extent:%d  start block : %ld, block count %ld\n", __LINE__, irec->br_startblock, irec->br_blockcount);
+    
+    uint32_t agno =  XFS_FSB_TO_AGNO(xfs, irec->br_startblock);
+    uint32_t blkno = XFS_FSB_TO_AGBNO(xfs, irec->br_startblock);
+    
+    fprintf(stderr, "[i] xfs_make_data_run_extent:%d  agno : %ld, blkno : %ld\n", __LINE__, agno, blkno);
+    
+    TSK_OFF_T soff = (agno * tsk_getu32(fs_info->endian, xfs->fs->sb_agblocks) + blkno); // real offset
+    
+    fprintf(stderr, "[i] xfs_make_data_run_extent:%d  soff : %lld\n", __LINE__, soff);
+    
+    //struct xfs_bmbt_irec ir = xfs_extent_get_offset(xfs, extent);
 
-    // TODO: data run on xfs
+    //fprintf(stderr, "[i] xfs_make_data_run_extent:%d  sibal irec : %ld  bcount : %lld\n",__LINE__, ir.br_startblock, ir.br_blockcount);
     data_run->offset = 0;
-    data_run->addr = xfs_inode_get_offset(xfs, inum);
-    //data_run->len = XFS_DIR3_DATA_ENTSIZE()
-
+    data_run->addr = soff;
+    data_run->len = irec->br_blockcount;
+    fprintf(stderr, "data_run->addr : %ld    len : %ld\n", data_run->addr, data_run->len);
     // save the run
 
     if (tsk_fs_attr_add_run(fs_info, fs_attr, data_run)) {
         return 1;
     }
-
+    fprintf(stderr,"[i] xfs_make_data_run_extent:  - LINE : xfs_make_data_run_extent passed\n");
     return 0;
 }
 
@@ -273,25 +308,6 @@ xfs_extent_tree_index_count(TSK_FS_INFO * fs_info,
 }
 */
 
-void
-xfs_bmbt_disk_get_all(
-    XFS_INFO* xfs,
-    struct xfs_bmbt_rec *rec,
-    struct xfs_bmbt_irec    *irec)
-{
-    uint64_t        l0 = tsk_getu64(xfs->fs_info.endian, rec->l0);
-    uint64_t        l1 = tsk_getu64(xfs->fs_info.endian, rec->l1);
-
-    irec->br_startoff = (l0 & xfs_mask64lo(64 - BMBT_EXNTFLAG_BITLEN)) >> 9;
-    irec->br_startblock = ((l0 & xfs_mask64lo(9)) << 43) | (l1 >> 21);
-    irec->br_blockcount = l1 & xfs_mask64lo(21);
-
-    if (l0 >> (64 - BMBT_EXNTFLAG_BITLEN))
-        irec->br_state = XFS_EXT_UNWRITTEN;
-    else
-        irec->br_state = XFS_EXT_NORM;
-}
-
 /**
  * \internal
  * Loads attribute for XFS Extents-based storage method.
@@ -302,38 +318,47 @@ static uint8_t
 xfs_load_attrs_block(TSK_FS_FILE *fs_file)
 {
     fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - called.\n", __LINE__);
-
     TSK_FS_META *fs_meta = fs_file->meta;
     TSK_FS_INFO *fs_info = fs_file->fs_info;
     XFS_INFO * xfs = (XFS_INFO*)fs_info;
     TSK_OFF_T length = 0;
-    TSK_FS_ATTR *fs_attr;
-    uint16_t num_entries;
-    void * datafork = fs_meta->content_ptr;
+    TSK_FS_ATTR * fs_attr;
+    int i;
+    xfs_bmbt_rec_t *rec;
 
+    rec = (xfs_bmbt_rec_t*)fs_meta->content_ptr;    
+    
+    for(int i = 0 ; i < 16 ; i ++){
+        if(i < 8)
+            fprintf(stderr, "%2x ",  rec->l0[i]);
+        else
+            fprintf(stderr, "%2x ", rec->l1[i-8]);
+    }
+    //fprintf(stderr, "\n");
+    //fprintf(stderr,">>>>> rec->l0 : %d   rec->l1 : %ld\n", tsk_getu64(fs_info->endian, rec->l0), tsk_getu64(fs_info->endian, rec->l1));
+      
     if ((fs_meta->attr != NULL)
         && (fs_meta->attr_state == TSK_FS_META_ATTR_STUDIED)) {
         return 0;
-    }
-    else if (fs_meta->attr_state == TSK_FS_META_ATTR_ERROR) {
+    }else if (fs_meta->attr_state == TSK_FS_META_ATTR_ERROR) {
         return 1;
     }
-
+    //fprintf(stderr, "sibal1\n");
     if (fs_meta->attr != NULL) {
         tsk_fs_attrlist_markunused(fs_meta->attr);
     }
     else {
         fs_meta->attr = tsk_fs_attrlist_alloc();
     }
-    
+        //fprintf(stderr, "sibal2\n");
     if (TSK_FS_TYPE_ISXFS(fs_info->ftype) == 0) {
         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
         tsk_error_set_errstr
-        ("xfs_load_attrs_block: Called with non-XFS file system: %x",
+        ("xfs_load_attr: Called with non-xfs file system: %x",
          fs_info->ftype);
         return 1;
     }
-    
+        //fprintf(stderr, "sibal3\n");
     length = roundup(fs_meta->size, fs_info->block_size);
     
     if ((fs_attr =
@@ -341,91 +366,30 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
                                 TSK_FS_ATTR_NONRES)) == NULL) {
         return 1;
     }
-    
+     //fprintf(stderr, "sibal4\n");
     if (tsk_fs_attr_set_run(fs_file, fs_attr, NULL, NULL,
                             TSK_FS_ATTR_TYPE_DEFAULT, TSK_FS_ATTR_ID_DEFAULT,
                             fs_meta->size, fs_meta->size, length, 0, 0)) {
         return 1;
     }
-    
-    xfs_bmbt_rec_t *rec;
-    xfs_bmbt_irec_t *irec;
 
-    rec = (xfs_bmbt_rec_t*)fs_meta->content_ptr;
-    irec = (xfs_bmbt_irec_t*)tsk_malloc(sizeof(xfs_bmbt_irec_t));
-
-    xfs_bmbt_disk_get_all(xfs, rec, irec);
-
-    fprintf(stderr, "xfs_bmbt_calc: startblock: %u, bc: %lu, startoff: %lu, state: %d\n",
-        irec->br_startblock, irec->br_blockcount, irec->br_startoff, irec->br_state);
-
-    // deserialize irec->br_startblock to AG number and block number
-    uint32_t agno = XFS_FSB_TO_AGNO(xfs, irec->br_startblock);
-    uint32_t agblkno = XFS_FSB_TO_AGBNO(xfs, irec->br_startblock);
-
-    fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - agno: %d, agblkno: %d, aglen: %d\n",
-        __LINE__, agno, agblkno, irec->br_blockcount);
-
-    TSK_OFF_T soff = (agno * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_agblocks) + agblkno)
-        * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize); // real offset
-
-    fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - offset: %lu\n",
-        __LINE__, soff);
-
-    ssize_t len, cnt;
-    
-    len = irec->br_blockcount * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize);
-    char *buf = (char*)tsk_malloc(sizeof(char) * len);
-
-    cnt = tsk_fs_read(fs_info, soff, buf, len);
-
-    struct xfs_dir3_data_hdr *hdr = (struct xfs_dir3_data_hdr_t*)buf;
-
-    // sanity check
-    if (hdr->hdr.magic != 0x33424458) { // XDB3
-        fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - not a dir2_data_hdr: %8x\n",
-            __LINE__, hdr->hdr.magic);
-        return 1;
-    }
-
-    xfs_dir2_data_entry_t *ent = (xfs_dir2_data_entry_t*)((char*)(hdr + 1));
-
+    //rec = (xfs_bmbt_rec_t*)fs_meta->content_ptr;    
+    //fprintf(stderr, "sibal5\n");
     while (true)
     {
-        if (ent->namelen == 0)
+        //fprintf(stderr,">>>>> rec->l0 : %d   rec->l1 : %ld\n", tsk_getu64(fs_info->endian, rec->l0), tsk_getu64(fs_info->endian, rec->l1));
+        if (tsk_getu64(fs_info->endian, rec->l0) == 0 && tsk_getu64(fs_info->endian, rec->l1) == 0)
             break;
-
-        uint64_t inum = ent->inumber;
-        uint8_t namelen = ent->namelen;
-
-        char *name = (char*)tsk_malloc(sizeof(char) * (namelen + 1));
-        memcpy(name, ent->name, namelen);
-        name[namelen] = '\0';
-
-        uint8_t ftype = xfs_dir3_blockentry_get_ftype(ent);
-        uint16_t tag = xfs_dir3_blockentry_get_tag(ent);
-
-        fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - filename: %s, inode: %lx, namelen: %d, tag: %d\n",
-            __LINE__, name, inum, namelen, ftype, tag);
-
-        files_found++;
-        fprintf(stderr, "files found: %d\n", files_found);
-
-        if (ftype == 1)
-        {
-            if (xfs_make_data_run_extent(fs_info, fs_attr, &ent, ftype, inum)) {
-                fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - xfs_make_data_run_extent failed.\n",
-                    __LINE__);
-                return 1;
-            }
+           
+        if (xfs_make_data_run_extent(fs_info, fs_attr, rec)) {
+            fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - xfs_make_data_run_extent failed.\n",
+                __LINE__);
+            return 1;
         }
-        else {
-
-        }
-
-        ent = xfs_dir2_data_nextentry(ent);
+        rec = xfs_dir2_data_nextentry(rec);
+    
     }
-
+    
     fs_meta->attr_state = TSK_FS_META_ATTR_STUDIED;
     
     return 0;

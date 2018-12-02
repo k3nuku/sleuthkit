@@ -37,60 +37,118 @@ xfs_dir3_data_get_ftype(
 
 static uint8_t
 xfs_dent_copy(XFS_INFO * xfs,
-    char *xfs_dent, TSK_FS_NAME * fs_name)
+    char *xfs_dent, TSK_FS_NAME *fs_name, TSK_FS_FILE *fs_file)
 {
     //fprintf(stderr, ">> xfs_dent_copy called.\n");
     
     TSK_FS_INFO *fs = &(xfs->fs_info);
-    // if format 1 (short form)
-    
-    xfs_dir2_sf_t * dir2_sf = (xfs_dir2_sf_t*) xfs_dent;
-    xfs_dir2_sf_hdr_t * hdr = (xfs_dir2_sf_hdr_t*) dir2_sf->hdr;
-    xfs_dir2_sf_entry_t * ent = (xfs_dir2_sf_entry_t*) dir2_sf->entry;
 
-    fs_name->meta_addr = (TSK_INUM_T)xfs_dir3_sfe_get_ino(hdr, ent);
-    
-    if(ent->namelen >= fs_name->name_size){
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_ARG);
-        tsk_error_set_errstr
-            ("xfs_dent_copy: Name Space too Small %d %" PRIuSIZE "",
-           ent->namelen, fs_name->name_size);
-        return 1;
+    if (fs_file->meta->content_type == 
+        TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM)
+    {
+        xfs_dir2_sf_t *dir2_sf = (xfs_dir2_sf_t*)xfs_dent;
+        xfs_dir2_sf_hdr_t *hdr = (xfs_dir2_sf_hdr_t*)dir2_sf->hdr;
+        xfs_dir2_sf_entry_t *ent = (xfs_dir2_sf_entry_t*)dir2_sf->entry;
+
+        fs_name->meta_addr = (TSK_INUM_T)xfs_dir3_sfe_get_ino(hdr, ent);
+
+        if (ent->namelen >= fs_name->name_size){
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_ARG);
+            tsk_error_set_errstr
+                ("xfs_dent_copy: Name Space too Small %d %" PRIuSIZE "",
+               ent->namelen, fs_name->name_size);
+            return 1;
+        }
+
+        strncpy(fs_name->name, ent->name, ent->namelen);
+        fs_name->name[ent->namelen] = '\0';
+        fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
+
+        switch (xfs_dir3_sfe_get_ftype(ent)) {
+            case XFS_DE_REG:
+                fprintf(stderr, "[i] xfs_dent_copy: xfs_dent.c: %d - [%d/%d] inode: %lu, namelen: %d, name: %s, ftype: %d\n",
+                __LINE__, ++files_found, 107, fs_name->meta_addr, ent->namelen, fs_name->name, xfs_dir3_sfe_get_ftype(ent));
+                fs_name->type = TSK_FS_NAME_TYPE_REG;
+                break;
+            case XFS_DE_DIR:
+                fs_name->type = TSK_FS_NAME_TYPE_DIR;
+                break;
+            case XFS_DE_CHR:
+                fs_name->type = TSK_FS_NAME_TYPE_CHR;
+                break;
+            case XFS_DE_BLK:
+                fs_name->type = TSK_FS_NAME_TYPE_BLK;
+                break;
+            case XFS_DE_FIFO:
+                fs_name->type = TSK_FS_NAME_TYPE_FIFO;
+                break;
+            case XFS_DE_SOCK:
+                fs_name->type = TSK_FS_NAME_TYPE_SOCK;
+                break;
+            case XFS_DE_LNK:
+                fs_name->type = TSK_FS_NAME_TYPE_LNK;
+                break;
+            case XFS_DE_UNKNOWN:
+            default:
+                fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
+                break;
+        }
     }
-    
-    strncpy(fs_name->name, ent->name, ent->namelen);
-    fs_name->name[ent->namelen] = '\0';
+    else if (fs_file->meta->content_type ==
+        TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS)
+    {
+        xfs_dir2_data_entry_t *ent = (xfs_dir2_data_entry_t*)xfs_dent;
 
-    fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
+        strncpy(fs_name->name, ent->name, ent->namelen);
+        fs_name->name[ent->namelen] = '\0';
+        fs_name->meta_addr = ent->inumber;
+        fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
 
-    switch (xfs_dir3_sfe_get_ftype(ent)) {
-        case XFS_DE_REG:
-            fs_name->type = TSK_FS_NAME_TYPE_REG;
-            break;
-        case XFS_DE_DIR:
-            fs_name->type = TSK_FS_NAME_TYPE_DIR;
-            break;
-        case XFS_DE_CHR:
-            fs_name->type = TSK_FS_NAME_TYPE_CHR;
-            break;
-        case XFS_DE_BLK:
-            fs_name->type = TSK_FS_NAME_TYPE_BLK;
-            break;
-        case XFS_DE_FIFO:
-            fs_name->type = TSK_FS_NAME_TYPE_FIFO;
-            break;
-        case XFS_DE_SOCK:
-            fs_name->type = TSK_FS_NAME_TYPE_SOCK;
-            break;
-        case XFS_DE_LNK:
-            fs_name->type = TSK_FS_NAME_TYPE_LNK;
-            break;
-        case XFS_DE_UNKNOWN:
-        default:
-            fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
-            break;
+        if (ent->namelen >= fs_name->name_size){
+            tsk_error_reset();
+            tsk_error_set_errno(TSK_ERR_FS_ARG);
+            tsk_error_set_errstr
+                ("xfs_dent_copy: Name Space too Small %d %" PRIuSIZE "",
+               ent->namelen, fs_name->name_size);
+            return 1;
+        }
+
+        fprintf(stderr, "[i] xfs_dent_copy: xfs.c: %d - [%d/%d] filename: %s, inode: %lx, namelen: %d, ftype: %d, tag: %d\n",
+        __LINE__, ++files_found, 107, fs_name->name, fs_name->meta_addr, ent->namelen,
+        xfs_dir3_blockentry_get_ftype(ent), xfs_dir3_blockentry_get_tag(ent));
+
+        switch (xfs_dir3_blockentry_get_ftype(ent)) {
+            case XFS_DE_REG:
+                fs_name->type = TSK_FS_NAME_TYPE_REG;
+                break;
+            case XFS_DE_DIR:
+                fs_name->type = TSK_FS_NAME_TYPE_DIR;
+                break;
+            case XFS_DE_CHR:
+                fs_name->type = TSK_FS_NAME_TYPE_CHR;
+                break;
+            case XFS_DE_BLK:
+                fs_name->type = TSK_FS_NAME_TYPE_BLK;
+                break;
+            case XFS_DE_FIFO:
+                fs_name->type = TSK_FS_NAME_TYPE_FIFO;
+                break;
+            case XFS_DE_SOCK:
+                fs_name->type = TSK_FS_NAME_TYPE_SOCK;
+                break;
+            case XFS_DE_LNK:
+                fs_name->type = TSK_FS_NAME_TYPE_LNK;
+                break;
+            case XFS_DE_UNKNOWN:
+            default:
+                fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
+                break;
+        }
     }
+    else
+        fprintf(stderr, "[i] xfs_dent_copy: xfs.c: %d - unsupported metadata type detected\n");
+
     fs_name->flags = 0;
 
     //fprintf(stderr, ">> xfs_dent_copy passed.\n");
@@ -104,7 +162,8 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     fprintf(stderr, "[i] xfs_dent_parse_sf: xfs_dent.c: %d - called.\n", __LINE__);
     TSK_FS_INFO *fs = &(xfs->fs_info);
     
-    TSK_FS_NAME * fs_name;
+    TSK_FS_NAME *fs_name;
+    TSK_FS_FILE *fs_file = a_fs_dir->fs_file;
     xfs_dir2_sf_hdr_t *hdr;
     xfs_dir2_sf_entry_t *ent; 
     
@@ -138,20 +197,15 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
 
         memcpy(name, ent->name, namelen);
 
-        //fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - inode: %lu, namelen: %d, name: %s: %d\n", __LINE__, num_entries);
-
         if (inode > fs->last_inum || namelen > XFS_MAXNAMELEN || namelen == 0) {
             fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - sanity check error\n", __LINE__);
             return TSK_ERR;
         }
 
-        fprintf(stderr, ">>>xfs_dent.c%d -> inode : %lx  namelen : %d  | last inum : %d | name : %s\n", __LINE__,
-            inode, namelen, fs->last_inum, name);
+        fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - [%d/%d] inode: %lu, namelen: %d, name: %s: %d\n",
+            __LINE__, ++files_found, 107, inode, namelen, name);
 
-        files_found++;
-        fprintf(stderr, "files found: %d\n", files_found);
-
-        if (xfs_dent_copy(xfs, dir2_sf, fs_name)) {
+        if (xfs_dent_copy(xfs, dir2_sf, fs_name, fs_file)) {
             tsk_fs_name_free(fs_name);
             return TSK_ERR;
         }
@@ -174,10 +228,6 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
         //     filename, filetype, inumdata, offset);
 
         ent = xfs_dir3_sf_nextentry(hdr, ent);
-
-        // offset += sizeof(xfs_dir2_sf_entry_t) 
-        //             + namelen * sizeof(char)
-        //             + sizeof(TSK_INUM_T);
     }
     tsk_fs_name_free(fs_name);
     return TSK_OK;
@@ -213,67 +263,72 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse_block(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
-    // while valid at current offset is bmbt_rec
-    //  bmbt_rec[n] 파싱 -> offset, block, blockcount 저장
-    // offset 이동
+    fprintf(stderr, "[i] xfs_dent_parse_block: xfs.c: %d - called.\n", __LINE__);
 
-    TSK_FS_INFO *fs = &(xfs->fs_info);
-    // TSK_FS_NAME *fs_name;
+    TSK_FS_INFO *fs_info = &(xfs->fs_info);
+    TSK_FS_NAME *fs_name;
+    TSK_FS_FILE *fs_file = a_fs_dir->fs_file;
 
-    // xfs_dir2_data_hdr_t *hdr;
-    // xfs_dir2_data_entry_t *dep;
-    // xfs_dir2_data_unused_t *dup;
-    // xfs_dir2_block_tail_t *btp;
+    if ((fs_name = tsk_fs_name_alloc(XFS_MAXNAMELEN + 1, 0)) == NULL)
+        return TSK_ERR;
 
-    // char *ptr; // current data entry
-    // char *endptr; // end of data entry
+    xfs_bmbt_rec_t *rec;
+    xfs_bmbt_irec_t *irec;
 
-    // int wantoff;
-    // xfs_off_t cook;
+    rec = (xfs_bmbt_rec_t*)buf;
+    irec = (xfs_bmbt_irec_t*)tsk_malloc(sizeof(xfs_bmbt_irec_t));
 
-    // int error;
+    xfs_bmbt_disk_get_all(xfs, rec, irec);
 
-    // // dir3
-    // //error = xfs_dir3_block_read();
-    // if (error)
-    //     return error;
+    fprintf(stderr, "[D] xfs_bmbt_calc: startblock: %u, bc: %lu, startoff: %lu, state: %d\n",
+        irec->br_startblock, irec->br_blockcount, irec->br_startoff, irec->br_state);
 
-    // // extract the byte offset
-    // //wantoff = xfs_dir2_dataptr_to_off(xfs, );
-    // //hdr = bp->b_addr; // b_addr == 가상 버퍼
-    // // we can skip check whether it is corrupted, we can recover it
+    // deserialize irec->br_startblock to AG number and block number
+    uint32_t agno = XFS_FSB_TO_AGNO(xfs, irec->br_startblock);
+    uint32_t agblkno = XFS_FSB_TO_AGBNO(xfs, irec->br_startblock);
 
-    // // dir2
-    // btp = xfs_dir2_block_tail_p(xfs, hdr);
-    // ptr = (char *)xfs_dir3_data_entry_p(hdr);
-    // endptr = xfs_dir2_block_leaf_p(xfs, btp);
+    TSK_OFF_T soff = (agno * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_agblocks) + agblkno)
+        * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize); // real offset
 
-    // while (ptr < endptr) {
-    //     uint8_t filetype;
+    fprintf(stderr, "[i] xfs_dent_parse_block: xfs.c: %d - agno: %d, agblkno: %d, aglen: %d, calcdoffset: %lu\n",
+        __LINE__, agno, agblkno, irec->br_blockcount, soff);
 
-    //     dup = (xfs_dir2_data_unused_t *)ptr;
+    ssize_t len = irec->br_blockcount * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize);
+    char *fbuf = (char*)tsk_malloc(sizeof(char) * len);
+    ssize_t cnt = tsk_fs_read(fs_info, soff, fbuf, len);
 
-    //     // to next iteration
-    //     ptr += xfs_dir3_data_entsize(dep->namelen);
+    struct xfs_dir3_data_hdr *hdr = (struct xfs_dir3_data_hdr_t*)fbuf;
 
-    //     // entry is before the desired starting point then skip it.
-    //     if ((char *)dep - (char *)hdr < wantoff)
-    //         continue;
+    // sanity check
+    if (hdr->hdr.magic != 0x33424458) { // XDB3
+        fprintf(stderr, "[i] xfs_dent_parse_block: xfs.c: %d - not a dir2_data_hdr: %8x\n",
+            __LINE__, hdr->hdr.magic);
+        return TSK_ERR;
+    }
 
-    //     cook = xfs_dir2_db_to_dataptr(xfs, (char*)dep - (char*)hdr); // calc entry pointer
-    //     filetype = xfs_dir3_data_get_ftype(dep);
+    xfs_dir2_data_entry_t *ent = (xfs_dir2_data_entry_t*)((char*)(hdr + 1) + 32); // sibal magically should be happened
 
-    //     // read name, namelen, inumber, filetype and copy to fs_dir
-    //     if (xfs_dent_copy(xfs, cook, fs_name)) {
-    //         tsk_fs_name_free(fs_name);
-    //         return TSK_ERR;
-    //     }
+    while (true)
+    {
+        if (ent->namelen == 0)
+            break;
 
-    //     if (tsk_fs_dir_add(a_fs_dir, fs_name)) { // add filled fs_name to fs_dir
-    //         tsk_fs_name_free(fs_name);
-    //         return TSK_ERR;
-    //     }
-    // }
+        // char *name = (char*)tsk_malloc(sizeof(char) * (ent->namelen + 1));
+        // strncpy(name, ent->name, ent->namelen);
+        // name[ent->namelen] = '\0';
+
+        /*if (strcmp(name, ".") != 0 && strcmp(name, "..") != 0)
+        { */       
+            if (xfs_dent_copy(xfs, ent, fs_name, fs_file)) {
+                tsk_fs_name_free(fs_name);
+                return TSK_ERR;
+            }
+        /*}*/
+
+        ent = xfs_dir2_data_nextentry(ent);
+        fprintf(stderr, "[i] xfs_dent_parse_block: xfs.c: %d - data_entry pos: %x\n",
+            __LINE__, ent);
+    }
 
     return TSK_OK;
 }
@@ -292,6 +347,7 @@ xfs_dent_parse(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
             break;
 
         case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS:
+            xfs_dent_parse_block(xfs, a_fs_dir, a_is_del, list_seen, buf, offset);
             break;
     }
 
@@ -315,7 +371,6 @@ TSK_RETVAL_ENUM
 xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
 {
-    // directory inode로부터 tsk_fs_dir -> tsk_fs_file 채우는거
     fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - called.\n", __LINE__);
 
     XFS_INFO * xfs = (XFS_INFO *) a_fs;
@@ -388,34 +443,9 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     ssize_t len;
     ssize_t cnt;
 
-    switch (fs_dir->fs_file->meta->content_type)
-    {
-        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM:
-            cnt = len = XFS_CONTENT_LEN_V5(xfs);    
-            memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
-            fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - skipping shortform to call tsk_fs_file_read\n", __LINE__);
-            break;
-
-        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS:
-            len = (a_fs->block_size < size) ? a_fs->block_size : size;
-            cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
-            break;
-
-        case TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BTREE:
-            len = (a_fs->block_size < size) ? a_fs->block_size : size;
-            cnt = tsk_fs_file_read(fs_dir->fs_file, offset, dirbuf, len, (TSK_FS_FILE_READ_FLAG_ENUM)0);
-            break;
-
-        default:
-            tsk_error_reset();
-            tsk_error_set_errno(TSK_ERR_FS_FWALK);
-            tsk_error_set_errstr
-            ("xfs_dir_open_meta: Error reading directory contents: %"
-                PRIuINUM ", Unknown content type\n", a_addr);
-            free(dirbuf);
-            return TSK_COR;
-            break;
-    }
+    cnt = len = XFS_CONTENT_LEN_V5(xfs);    
+    memcpy(dirbuf, fs_dir->fs_file->meta->content_ptr, XFS_CONTENT_LEN_V5(xfs));
+    fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - skipping shortform/blockdir to call tsk_fs_file_read\n", __LINE__);
 
     if (cnt != len) {
         fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - failed to compare count and len cnt: %d len:%d\n",

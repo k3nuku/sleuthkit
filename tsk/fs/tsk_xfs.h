@@ -1296,10 +1296,10 @@ xfs_dir3_sfe_get_ftype(
 
 static uint8_t
 xfs_dir3_blockentry_get_ftype(
-    struct xfs_dir2_data_entry *sfep)
+    struct xfs_dir2_data_entry *daen) // inumber namelen name ftype tag
 {
     uint8_t ftype;
-    ftype = sfep->name[sfep->namelen];
+    ftype = daen->name[daen->namelen];
     if (ftype >= XFS_DIR3_FT_MAX)
         return XFS_DIR3_FT_UNKNOWN;
     return ftype;
