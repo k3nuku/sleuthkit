@@ -1347,14 +1347,14 @@ xfs_dir3_blockentry_get_tag(
 
 static inline 
 TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
-    fprintf(stderr, "xfs_inode_get_offset called. inode num : %lx\n", a_addr);
+    // fprintf(stderr, "xfs_inode_get_offset called. inode num : %lx\n", a_addr);
 
     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
     TSK_OFF_T offset_block;
     TSK_OFF_T offset;
     uint8_t sb_agblklog = xfs->fs->sb_agblklog;
     uint8_t sb_inopblog = xfs->fs->sb_inopblog;
-    fprintf(stderr, "[!] inode_offset returning: %lx, org: %lx\n", sb_agblklog, sb_inopblog);
+    // fprintf(stderr, "[!] inode_offset returning: %lx, org: %lx\n", sb_agblklog, sb_inopblog);
 
     /* lock access to grp_buf */
     tsk_take_lock(&xfs->lock);
@@ -1363,10 +1363,10 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
     uint32_t blk_num = (a_addr - (ag_num << (sb_agblklog + sb_inopblog))) >> sb_inopblog;
     uint32_t sec_num = (a_addr - (ag_num << (sb_agblklog + sb_inopblog)) - (blk_num << sb_inopblog));
 
-    fprintf(stderr, "inode num : %lx\n", a_addr);
-    fprintf(stderr, "AG num    : %lx\n", ag_num);
-    fprintf(stderr, "Block num : %lu\n", blk_num);
-    fprintf(stderr, "Sector num: %lu\n", sec_num);
+    // fprintf(stderr, "inode num : %lx\n", a_addr);
+    // fprintf(stderr, "AG num    : %lx\n", ag_num);
+    // fprintf(stderr, "Block num : %lu\n", blk_num);
+    // fprintf(stderr, "Sector num: %lu\n", sec_num);
 
     tsk_release_lock(&xfs->lock);
 
@@ -1376,7 +1376,7 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
     TSK_OFF_T sec_offset = sec_num * tsk_getu16(fs->endian, xfs->fs->sb_sectsize);
     
     offset = ag_offset + blk_offset + sec_offset;
-    fprintf(stderr, "[!] inode_offset returning: %lx, org: %lx, agof: %lx, blkof: %lx, sec: %lx\n", offset, ag_offset, blk_offset, sec_offset);
+    // fprintf(stderr, "[!] inode_offset returning: %lx, org: %lx, agof: %lx, blkof: %lx, sec: %lx\n", offset, ag_offset, blk_offset, sec_offset);
 
     return offset;
 }
