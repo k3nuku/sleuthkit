@@ -452,6 +452,8 @@ xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
         return 1;
     }
 
+    fprintf(stderr, "\t\t[i] xfs_dinode_load before calling getoffset: inode num : %lx\n", dino_inum);
+
     addr = xfs_inode_get_offset(xfs, dino_inum);
     cnt = tsk_fs_read(fs, addr, (char *)dino_buf, xfs->inode_size);
     

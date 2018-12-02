@@ -102,7 +102,7 @@ xfs_dent_copy(XFS_INFO * xfs,
 
         strncpy(fs_name->name, ent->name, ent->namelen);
         fs_name->name[ent->namelen] = '\0';
-        fs_name->meta_addr = (TSK_INUM_T)ent->inumber;
+        fs_name->meta_addr = tsk_getu64(xfs->fs_info.endian, ent->inumber);
         fs_name->type = TSK_FS_NAME_TYPE_UNDEF;
 
         if (ent->namelen >= fs_name->name_size){
@@ -364,7 +364,7 @@ TSK_RETVAL_ENUM
 xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
 {
-    fprintf(stderr, "[i] xfs_dir_open_meta: xfs_dent.c: %d - called.\n", __LINE__);
+    fprintf(stderr, "\t[i] xfs_dir_open_meta: xfs_dent.c: %d - called. inum: %lx\n", __LINE__, a_addr);
 
     XFS_INFO * xfs = (XFS_INFO *) a_fs;
     TSK_FS_DIR * fs_dir;
@@ -409,6 +409,8 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
             return TSK_ERR;
         }
     }
+
+    fprintf(stderr, "\t[i] xfs_dir_open_meta: xfs_dent.c: %d - before calling fileopenmeta. inum: %lx\n", __LINE__, a_addr);
 
     // handle the orphan directory if its contents were requested
     // if (a_addr == TSK_FS_ORPHANDIR_INUM(a_fs)) {
