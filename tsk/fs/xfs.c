@@ -959,9 +959,11 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
     
     if(tsk_fs_guessu32(fs, xfs->fs->sb_magicnum, XFS_FS_MAGIC)){
-        fprintf(stderr, "xfs_open : superblock magic failed\n");
-        fprintf(stderr, "xfs_open : superblock read : %x%x%x%x\n", 
-        xfs->fs->sb_magicnum[0], xfs->fs->sb_magicnum[1], xfs->fs->sb_magicnum[2], xfs->fs->sb_magicnum[3]);
+        if (tsk_verbose){
+            fprintf(stderr, "xfs_open : superblock magic failed\n");
+            fprintf(stderr, "xfs_open : superblock read : %x%x%x%x\n", 
+                xfs->fs->sb_magicnum[0], xfs->fs->sb_magicnum[1], xfs->fs->sb_magicnum[2], xfs->fs->sb_magicnum[3]);
+        }
 
         fs->tag = 0;
         free(xfs->fs);
@@ -969,7 +971,8 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         tsk_error_reset();
         tsk_error_set_errno(TSK_ERR_FS_MAGIC);
         tsk_error_set_errstr("not an xfs file system (magic)");
-        if(tsk_verbose)
+        
+        if (tsk_verbose)
             fprintf(stderr, "xfs_open : invalid magic\n");
         return NULL;
     }
