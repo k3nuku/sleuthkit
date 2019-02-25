@@ -337,14 +337,14 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
         fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - error on attr, exiting load_attr_blk\n", __LINE__);
         return 1;
     }
-    //fprintf(stderr, "sibal1\n");
+
     if (fs_meta->attr != NULL) {
         tsk_fs_attrlist_markunused(fs_meta->attr);
     }
     else {
         fs_meta->attr = tsk_fs_attrlist_alloc();
     }
-        //fprintf(stderr, "sibal2\n");
+
     if (TSK_FS_TYPE_ISXFS(fs_info->ftype) == 0) {
         tsk_error_set_errno(TSK_ERR_FS_INODE_COR);
         tsk_error_set_errstr
@@ -352,7 +352,7 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
          fs_info->ftype);
         return 1;
     }
-        //fprintf(stderr, "sibal3\n");
+
     length = roundup(fs_meta->size, fs_info->block_size);
     
     if ((fs_attr =
@@ -360,7 +360,7 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
                                 TSK_FS_ATTR_NONRES)) == NULL) {
         return 1;
     }
-     //fprintf(stderr, "sibal4\n");
+
     if (tsk_fs_attr_set_run(fs_file, fs_attr, NULL, NULL,
                             TSK_FS_ATTR_TYPE_DEFAULT, TSK_FS_ATTR_ID_DEFAULT,
                             fs_meta->size, fs_meta->size, length, 0, 0)) {
@@ -368,7 +368,7 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
     }
 
     //rec = (xfs_bmbt_rec_t*)fs_meta->content_ptr;    
-    //fprintf(stderr, "sibal5\n");
+
     while (true)
     {
         //fprintf(stderr,">>>>> rec->l0 : %d   rec->l1 : %ld\n", tsk_getu64(fs_info->endian, rec->l0), tsk_getu64(fs_info->endian, rec->l1));

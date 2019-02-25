@@ -301,7 +301,7 @@ xfs_dent_parse_block(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
         return TSK_ERR;
     }
 
-    xfs_dir2_data_entry_t *ent = (xfs_dir2_data_entry_t*)((char*)(hdr + 1) + 32); // sibal magically should be happened
+    xfs_dir2_data_entry_t *ent = (xfs_dir2_data_entry_t*)((char*)(hdr + 1) + 32); // magically should be happened
 
     while (true)
     {
