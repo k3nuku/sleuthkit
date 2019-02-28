@@ -65,13 +65,9 @@ xfs_dent_copy(XFS_INFO * xfs,
 
         switch (xfs_dir3_sfe_get_ftype(ent)) {
             case XFS_DE_REG:
-                // fprintf(stderr, "[i] xfs_dent_copy: xfs_dent.c: %d - File[%d/%d] inode: %lu, namelen: %d, name: %s, ftype: %d\n",
-                // __LINE__, ++files_found, 100, fs_name->meta_addr, ent->namelen, fs_name->name, xfs_dir3_sfe_get_ftype(ent));
                 fs_name->type = TSK_FS_NAME_TYPE_REG;
                 break;
             case XFS_DE_DIR:
-                // fprintf(stderr, "[i] xfs_dent_copy: xfs_dent.c: %d - Folder[%d/%d] inode: %lu, namelen: %d, name: %s, ftype: %d\n",
-                // __LINE__, ++folders_found, 7, fs_name->meta_addr, ent->namelen, fs_name->name, xfs_dir3_sfe_get_ftype(ent));
                 fs_name->type = TSK_FS_NAME_TYPE_DIR;
                 break;
             case XFS_DE_CHR:
@@ -116,15 +112,9 @@ xfs_dent_copy(XFS_INFO * xfs,
 
         switch (xfs_dir3_blockentry_get_ftype(ent)) {
             case XFS_DE_REG:
-                // fprintf(stderr, "[i] xfs_dent_copy: xfs.c: %d - File[%d/%d] filename: %s, inode: %lx, namelen: %d, ftype: %d, tag: %d\n",
-                //     __LINE__, ++files_found, 100, fs_name->name, fs_name->meta_addr, ent->namelen,
-                //     xfs_dir3_blockentry_get_ftype(ent), xfs_dir3_blockentry_get_tag(ent));
                 fs_name->type = TSK_FS_NAME_TYPE_REG;
                 break;
             case XFS_DE_DIR:
-                // fprintf(stderr, "[i] xfs_dent_copy: xfs.c: %d - Folder[%d/%d] filename: %s, inode: %lx, namelen: %d, ftype: %d, tag: %d\n",
-                //     __LINE__, ++folders_found, 7, fs_name->name, fs_name->meta_addr, ent->namelen,
-                //     xfs_dir3_blockentry_get_ftype(ent), xfs_dir3_blockentry_get_tag(ent));
                 fs_name->type = TSK_FS_NAME_TYPE_DIR;
                 break;
             case XFS_DE_CHR:
@@ -159,7 +149,6 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
-    // fprintf(stderr, "[i] xfs_dent_parse_sf: xfs_dent.c: %d - called.\n", __LINE__);
     TSK_FS_INFO *fs = &(xfs->fs_info);
     
     TSK_FS_NAME *fs_name;
@@ -167,7 +156,6 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     xfs_dir2_sf_hdr_t *hdr;
     xfs_dir2_sf_entry_t *ent; 
     
-    // dir2_sf = dir2_sf header + dir2_sf entry => to calculate inode offset in dent_copy 
     xfs_dir2_sf_t * dir2_sf = (xfs_dir2_sf_t *)tsk_malloc(sizeof(xfs_dir2_sf_t));
     hdr = (xfs_dir2_sf_hdr_t*)buf;
     dir2_sf->hdr = hdr;   
@@ -182,8 +170,6 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     ent = (char*)(hdr + 1) - (hdr->i8count == 0) * 4; // code of miracle
     
     uint16_t num_entries = (hdr->i8count > 0) ? hdr->i8count : hdr->count;
-
-    // fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - entries: %d\n", __LINE__, num_entries);
 
     for (int i = 0; i < num_entries; i++)
     {
@@ -202,23 +188,12 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
             return TSK_ERR;
         }
 
-        // fprintf(stderr, "[i] xfs_dent_parse_shortform: xfs_dent.c: %d - [%d/%d] inode: %lu, namelen: %d, name: %s\n",
-        //     __LINE__, ++files_found, 107, inode, namelen, name);
-
         if (xfs_dent_copy(xfs, dir2_sf, fs_name, fs_file)) {
             tsk_fs_name_free(fs_name);
             return TSK_ERR;
         }
 
         fs_name->flags = TSK_FS_NAME_FLAG_ALLOC;
-
-        /* Do we have a deleted entry? */
-        
-        // if ((dellen > 0) || (inode == 0) || (a_is_del)) {
-        //     fs_name->flags = TSK_FS_NAME_FLAG_UNALLOC;
-        //     if (dellen > 0)
-        //         dellen -= minreclen;
-        // }
 
         if (tsk_fs_dir_add(a_fs_dir, fs_name)) {
             tsk_fs_name_free(fs_name);
@@ -261,8 +236,6 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse_block(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
-    // fprintf(stderr, "[i] xfs_dent_parse_block: xfs.c: %d - called.\n", __LINE__);
-
     TSK_FS_INFO *fs_info = &(xfs->fs_info);
     TSK_FS_NAME *fs_name;
 
@@ -277,15 +250,11 @@ xfs_dent_parse_block(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
 
     xfs_bmbt_disk_get_all(xfs, rec, irec);
 
-    // deserialize irec->br_startblock to AG number and block number
     uint32_t agno = XFS_FSB_TO_AGNO(xfs, irec->br_startblock);
     uint32_t agblkno = XFS_FSB_TO_AGBNO(xfs, irec->br_startblock);
 
     TSK_OFF_T soff = (agno * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_agblocks) + agblkno)
         * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize); // real offset
-
-    // fprintf(stderr, "[i] xfs_dent_parse_block: xfs.c: %d - agno: %d, agblkno: %d, aglen: %d, calcdoffset: %lu\n",
-    //     __LINE__, agno, agblkno, irec->br_blockcount, soff);
 
     ssize_t len = irec->br_blockcount * tsk_getu32(xfs->fs_info.endian, xfs->fs->sb_blocksize);
 
@@ -330,8 +299,6 @@ static TSK_RETVAL_ENUM
 xfs_dent_parse(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t a_is_del, TSK_LIST ** list_seen, char *buf, TSK_OFF_T offset)
 {
-    // fprintf(stderr, "[i] xfs_dent_parse: xfs_dent.c: %d - called.\n", __LINE__);
-
     TSK_FS_INFO* fs_info = (TSK_FS_INFO*) xfs;
     
     switch(a_fs_dir->fs_file->meta->content_type){
@@ -364,8 +331,6 @@ TSK_RETVAL_ENUM
 xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
     TSK_INUM_T a_addr)
 {
-    // fprintf(stderr, "\t[i] xfs_dir_open_meta: xfs_dent.c: %d - called. inum: %lx\n", __LINE__, a_addr);
-
     XFS_INFO * xfs = (XFS_INFO *) a_fs;
     TSK_FS_DIR * fs_dir;
     TSK_LIST *list_seen = NULL;
@@ -410,13 +375,6 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
         }
     }
 
-    // fprintf(stderr, "\t[i] xfs_dir_open_meta: xfs_dent.c: %d - before calling fileopenmeta. inum: %lx\n", __LINE__, a_addr);
-
-    // handle the orphan directory if its contents were requested
-    // if (a_addr == TSK_FS_ORPHANDIR_INUM(a_fs)) {
-    //     return tsk_fs_dir_find_orphans(a_fs, fs_dir);
-    // }
-
     if ((fs_dir->fs_file =
         tsk_fs_file_open_meta(a_fs, NULL, a_addr)) == NULL) { // inode_lookup -> content_ptr 채움
         fprintf(stderr, "xfs_fs_dir_open_meta: failed to obtain fs_file meta info\n");
@@ -445,7 +403,6 @@ xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
 
     free(dirbuf);
 
-    // fprintf(stderr, "xfs_dir_open_meta: passed\n\n");
     return TSK_OK;
 }
 

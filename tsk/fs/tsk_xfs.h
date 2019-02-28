@@ -732,37 +732,14 @@ xfs_dir2_sf_get_ino(
     else
         return get_unaligned_be32(from);
 }
-/*
-static void
-xfs_dir2_sf_put_ino(
-    struct xfs_dir2_sf_hdr  *hdr,
-    uint8_t         *to,
-    xfs_ino_t       ino)
-{
-    ASSERT((ino & 0xff00000000000000ULL) == 0);
 
-    if (hdr->i8count)
-        put_unaligned_be64(ino, to);
-    else
-        put_unaligned_be32(ino, to);
-}
-*/
 static xfs_ino_t
 xfs_dir2_sf_get_parent_ino(
     struct xfs_dir2_sf_hdr  *hdr)
 {
     return xfs_dir2_sf_get_ino(hdr, hdr->parent);
 }
-/*
-static void
-xfs_dir2_sf_put_parent_ino(
-    struct xfs_dir2_sf_hdr  *hdr,
-    xfs_ino_t       ino)
-{
-    xfs_dir2_sf_put_ino(hdr, hdr->parent, ino);
-}
-*/
-// Helpers: shortform type
+
 /*
  * Inode numbers in short-form directories can come in two versions,
  * either 4 bytes or 8 bytes wide.  These helpers deal with the
@@ -770,7 +747,6 @@ xfs_dir2_sf_put_parent_ino(
  *
  * For 64-bit inode number the most significant byte must be zero.
  */
-
 /*
  * In short-form directory entries the inode numbers are stored at variable
  * offset behind the entry name. If the entry stores a filetype value, then it
@@ -784,16 +760,7 @@ xfs_dir2_sfe_get_ino(
 {
     return xfs_dir2_sf_get_ino(hdr, &sfep->name[sfep->namelen]);
 }
-/*
-static void
-xfs_dir2_sfe_put_ino(
-    struct xfs_dir2_sf_hdr  *hdr,
-    struct xfs_dir2_sf_entry *sfep,
-    xfs_ino_t       ino)
-{
-    xfs_dir2_sf_put_ino(hdr, &sfep->name[sfep->namelen], ino);
-}
-*/
+
 static xfs_ino_t
 xfs_dir3_sfe_get_ino(
     struct xfs_dir2_sf_hdr  *hdr,
@@ -916,19 +883,6 @@ typedef struct xfs_dir2_leaf_tail {
 } xfs_dir2_leaf_tail_t;
 
 /*
-    Leaf block:: AIO
-*/
-
-
-//typedef struct xfs_dir2_leaf {
-  //  xfs_dir2_leaf_hdr_t hdr;            /* leaf header */
-    //xfs_dir2_leaf_entry_t   __ents[];   /* entries */
-    //uint16_t         offset[];          /* offsets */
-    //xfs_dir2_leaf_tail_t tail;          /* tail*/
-//} xfs_dir2_leaf_t;
-
-
-/*
     Freeindex block:: header
 */
 typedef struct xfs_dir2_free_hdr {
@@ -946,8 +900,6 @@ typedef struct xfs_dir2_free {
     uint16_t          bests[];    /* best free counts */
                         /* unused entries are -1 */
 } xfs_dir2_free_t;
-
-
 
 /*
  * Single block format.
@@ -1007,15 +959,13 @@ typedef union {
 } xfs_dir2_inou_t;
 
 // Btree block format
-/* short form block header */
 struct xfs_btree_block_shdr {
     uint32_t      bb_leftsib;
     uint32_t      bb_rightsib;
 
     uint64_t      bb_blkno;
     uint64_t      bb_lsn;
-    uint8_t       bb_uuid[8];
-//    uuid_t      bb_uuid;
+    uuid_t        bb_uuid;
     uint32_t      bb_owner;
     uint32_t      bb_crc;
     //__le32      bb_crc;
@@ -1028,8 +978,7 @@ struct xfs_btree_block_lhdr {
 
     uint64_t      bb_blkno;
     uint64_t      bb_lsn;
-    uint8_t       bb_uuid[8];
-//    uuid_t      bb_uuid;
+    uuid_t       bb_uuid;
     uint64_t      bb_owner;
     uint32_t    bb_crc;
     //__le32      bb_crc;
@@ -1096,24 +1045,6 @@ struct xfs_btree_block {
 #define XFS_IN_USER_VISIBLE            0x004BDFFF      /* User visible flags */
 #define XFS_IN_USER_MODIFIABLE         0x004B80FF      /* User modifiable flags */
 
-
-/*
- * shortform directory entry
- */
-/*
-    typedef struct {
-
-    } XFS_sfentry;
-*/
-/*
- * shortform attribute
- */
-/*
-    typedef struct {
-
-    } XFS_sfattr;
-*/
-
 /* XFS directory file types  */
 #define XFS_DE_UNKNOWN         0
 #define XFS_DE_REG             1
@@ -1124,7 +1055,6 @@ struct xfs_btree_block {
 #define XFS_DE_SOCK            6
 #define XFS_DE_LNK             7
 #define XFS_DE_MAX             8
-
 
 /*
  * Values for di_format
@@ -1149,11 +1079,6 @@ typedef enum xfs_dinode_fmt {
 #define JBD2_FEATURE_INCOMPAT_REVOKE        0x00000001
 #define JBD2_FEATURE_INCOMPAT_64BIT         0x00000002
 #define JBD2_FEATURE_INCOMPAT_ASYNC_COMMIT  0x00000004
-/*
-    typedef struct {
-        // 저널 슈퍼블록
-    } XFS_journ_sb;
-*/
 
 #define XFS_J_ETYPE_DESC   1       /* descriptor block */
 #define XFS_J_ETYPE_COM    2       /* commit */
@@ -1161,13 +1086,6 @@ typedef enum xfs_dinode_fmt {
 #define XFS_J_ETYPE_SB2    4       /* sb v2 */
 #define XFS_J_ETYPE_REV    5       /* revoke */
 
-
-/* Header that is used for all structures */
-/*
-    typedef struct {
-        // 저널 헤더
-    } XFS_journ_head;
-*/
 /* JBD2 Checksum types */
 #define JBD2_CRC32_CHKSUM   1
 #define JBD2_MD5_CHKSUM     2
@@ -1178,31 +1096,11 @@ typedef enum xfs_dinode_fmt {
 
 #define NSEC_PER_SEC 1000000000L
 
-/* Header for XFS commit blocks */
-/*
-    typedef struct {
-        // 저널 커밋헤드
-    } XFSfs_journ_commit_head;
-*/
-
 /* dentry flags */
 #define XFS_J_DENTRY_ESC   1       /* The orig block starts with magic */
 #define XFS_J_DENTRY_SAMEID    2       /* Entry is for same id, so do not skip 16 ahead */
 #define XFS_J_DENTRY_DEL   4       /* not currently used in src */
 #define XFS_J_DENTRY_LAST  8       /* Last tag */
-
-/* Entry in the descriptor table */
-/*
-    typedef struct {
-        // 저널 디스크립터
-    } XFS_journ_dentry;
-*/
-
-/*
-typedef struct XFS_agib_header{
-
-} XFS_agib_header;
-*/
 
 extern TSK_RETVAL_ENUM
     xfs_dir_open_meta(TSK_FS_INFO * a_fs, TSK_FS_DIR ** a_fs_dir,
@@ -1219,10 +1117,9 @@ static inline bool xfs_sb_good_version(TSK_FS_INFO* fs, struct xfs_sb *sbp)
     if (tsk_fs_guessu16(fs, sbp->sb_versionnum, XFS_SB_VERSION_5))
         return true;
     if (tsk_fs_guessu16(fs, sbp->sb_versionnum, XFS_SB_VERSION_4))
-    { // checking v4 feature
+    {
         tsk_fprintf(stderr, "Found superblock version 4, continuing with version 5 analyzer");
-        return true; // 일단 v4는 미구현
-        //return xfs_sb_good_v4_features(sbp);
+        return true;
     }
     return false;
 }
@@ -1254,9 +1151,6 @@ static inline bool xfs_sb_has_ro_compat_feature(
         return 1;
     else
         return 0;
-    
-    //return !
-    //return !tsk_fs_guessu32(fs, sbp->sb_features_ro_compat & feature, 0);
 }
 
 static inline bool xfs_sb_has_incompat_feature(
@@ -1269,7 +1163,6 @@ static inline bool xfs_sb_has_incompat_feature(
         return 1;
     else
         return 0;
-    //return !tsk_fs_guessu32(sbp->sb_features_incompat & feature, 0);
 }
 
 
@@ -1283,12 +1176,7 @@ xfs_dir2_block_tail_p(XFS_INFO *xfs, struct xfs_dir2_data_hdr *hdr)
     return ((struct xfs_dir2_block_tail *)
         ((char *)hdr + tsk_getu32(fs->endian, xfs->fs->sb_blocksize))) - 1;
 }
-// +static inline struct xfs_dir2_block_tail *
-// +xfs_dir2_block_tail_p(struct xfs_fs_info *fs_info, struct xfs_dir2_data_hdr *hdr)
-// +{
-// +    return ((struct xfs_dir2_block_tail *)
-// +	    ((char *)hdr + fs_info->dirblksize)) - 1;
-// +}
+
 /*
  * Pointer to the leaf entries embedded in a data block (1-block format)
  */
@@ -1299,19 +1187,6 @@ xfs_dir2_block_leaf_p(XFS_INFO *xfs, struct xfs_dir2_block_tail *btp)
     uint32_t count = btp->count;
     return ((struct xfs_dir2_leaf_entry *)btp) - count;
 }
-
-
-// typedef uint16_t 	xfs_dir2_data_off_
-
-// #define XFS_DIR2_DATA_ENTSIZE(n)					\
-// 	round_up((offsetof(struct xfs_dir2_data_entry, name[0]) + (n) +	\
-// 		 sizeof(xfs_dir2_data_off_t)), XFS_DIR2_DATA_ALIGN)
-
-// #define XFS_DIR3_DATA_ENTSIZE(n)					\
-// 	round_up((offsetof(struct xfs_dir2_data_entry, name[0]) + (n) +	\
-// 		 sizeof(xfs_dir2_data_off_t) + sizeof(uint8_t)),	\
-// 		XFS_DIR2_DATA_ALIGN)
-
 
 static uint8_t
 xfs_dir3_sfe_get_ftype(
@@ -1348,14 +1223,11 @@ xfs_dir3_blockentry_get_tag(
 
 static inline 
 TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
-    // fprintf(stderr, "xfs_inode_get_offset called. inode num : %lx\n", a_addr);
-
     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
     TSK_OFF_T offset_block;
     TSK_OFF_T offset;
     uint8_t sb_agblklog = xfs->fs->sb_agblklog;
     uint8_t sb_inopblog = xfs->fs->sb_inopblog;
-    // fprintf(stderr, "[!] inode_offset returning: %lx, org: %lx\n", sb_agblklog, sb_inopblog);
 
     /* lock access to grp_buf */
     tsk_take_lock(&xfs->lock);
@@ -1364,20 +1236,13 @@ TSK_OFF_T xfs_inode_get_offset(XFS_INFO * xfs, TSK_INUM_T a_addr){
     uint32_t blk_num = (a_addr - (ag_num << (sb_agblklog + sb_inopblog))) >> sb_inopblog;
     uint32_t sec_num = (a_addr - (ag_num << (sb_agblklog + sb_inopblog)) - (blk_num << sb_inopblog));
 
-    // fprintf(stderr, "inode num : %lx\n", a_addr);
-    // fprintf(stderr, "AG num    : %lx\n", ag_num);
-    // fprintf(stderr, "Block num : %lu\n", blk_num);
-    // fprintf(stderr, "Sector num: %lu\n", sec_num);
-
     tsk_release_lock(&xfs->lock);
 
-    // sb_agblocks = ag size
     TSK_OFF_T ag_offset = ag_num * (tsk_getu32(fs->endian, xfs->fs->sb_agblocks) * tsk_getu32(fs->endian, xfs->fs->sb_blocksize));
     TSK_OFF_T blk_offset = blk_num * tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
     TSK_OFF_T sec_offset = sec_num * tsk_getu16(fs->endian, xfs->fs->sb_sectsize);
     
     offset = ag_offset + blk_offset + sec_offset;
-    // fprintf(stderr, "[!] inode_offset returning: %lx, org: %lx, agof: %lx, blkof: %lx, sec: %lx\n", offset, ag_offset, blk_offset, sec_offset);
 
     return offset;
 }

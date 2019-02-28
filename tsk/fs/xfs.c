@@ -38,7 +38,6 @@ xfs_mount_validate_sb(
     if (tsk_fs_guessu64(fs, sbp->sb_versionnum, XFS_SB_VERSION_5)) {
     
         if (xfs_sb_has_compat_feature(fs, sbp, XFS_SB_FEAT_COMPAT_UNKNOWN)) {
-        //if(XFS_HAS_COMPAT_FEATURE(fs, sbp, XFS_SB_FEAT_COMPAT_UNKNOWN)) {
             tsk_fprintf(stderr,
                 "Superblock has unknown compatible features (0x%x) enabled.",
                 (tsk_getu32(fs->endian, sbp->sb_features_compat) & XFS_SB_FEAT_COMPAT_UNKNOWN));
@@ -58,65 +57,7 @@ xfs_mount_validate_sb(
             tsk_fprintf(stderr, 
                 "Filesystem can not be safely mounted by tsk.");
         }
-    } //else if (xfs_sb_version_hascrc(sbp)) {
-        /*
-         * We can't read verify the sb LSN because the read verifier is
-         * called before the log is allocated and processed. We know the
-         * log is set up before write verifier (!check_version) calls,
-         * so just check it here.
-         */
-        /*if (!xfs_log_check_lsn(mp, sbp->sb_lsn)) // sb_lsn == 64bit uint64_t
-            return -EFSCORRUPTED;*/
-    //}
-
-    /*
-    if (xfs_sb_version_has_pquotino(sbp)) {
-        if (sbp->sb_qflags & (XFS_OQUOTA_ENFD | XFS_OQUOTA_CHKD)) {
-            xfs_notice(mp,
-               "Version 5 of Super block has XFS_OQUOTA bits.");
-            return -EFSCORRUPTED;
-        }
-    } else if (sbp->sb_qflags & (XFS_PQUOTA_ENFD | XFS_GQUOTA_ENFD |
-                XFS_PQUOTA_CHKD | XFS_GQUOTA_CHKD)) {
-            xfs_notice(mp,
-"Superblock earlier than Version 5 has XFS_[PQ]UOTA_{ENFD|CHKD} bits.");
-            return -EFSCORRUPTED;
-    }*/
-
-    /*
-     * Full inode chunks must be aligned to inode chunk size when
-     * sparse inodes are enabled to support the sparse chunk
-     * allocation algorithm and prevent overlapping inode records.
-     */
-    /*
-    if (xfs_sb_version_hassparseinodes(sbp)) {
-        uint32_t    align;
-        align = XFS_INODES_PER_CHUNK * sbp->sb_inodesize
-                >> sbp->sb_blocklog;
-        if (sbp->sb_inoalignmt != align) {
-            xfs_warn(mp,
-"Inode block alignment (%u) must match chunk size (%u) for sparse inodes.",
-                 sbp->sb_inoalignmt, align);
-            return -EINVAL;
-        }
-    }*/
-
-    /*
-    if (unlikely(
-        sbp->sb_logstart == 0 && mp->m_logdev_targp == mp->m_ddev_targp)) {
-        xfs_warn(mp,
-        "filesystem is marked as having an external log; "
-        "specify logdev on the mount command line.");
-        return -EINVAL;
     }
-    if (unlikely(
-        sbp->sb_logstart != 0 && mp->m_logdev_targp != mp->m_ddev_targp)) {
-        xfs_warn(mp,
-        "filesystem is marked as having an internal log; "
-        "do not specify logdev on the mount command line.");
-        return -EINVAL;
-    }
-    */
 
     /*
      * More sanity checking.  Most of these were stolen directly from
@@ -125,23 +66,17 @@ xfs_mount_validate_sb(
     if ((tsk_getu32(fs->endian, sbp->sb_agcount) <= 0                    ||
         tsk_getu16(fs->endian, sbp->sb_sectsize) < XFS_MIN_SECTORSIZE           ||
         tsk_getu16(fs->endian, sbp->sb_sectsize) > XFS_MAX_SECTORSIZE           ||
-        //sbp->sectlog < XFS_MIN_SECTORSIZE_LOG ||
         tsk_getu8(fs->endian, sbp->sb_sectlog) < XFS_MIN_SECTORSIZE_LOG            ||
-        //sbp->sb_sectlog > XFS_MAX_SECTORSIZE_LOG ||
         tsk_getu8(fs->endian, sbp->sb_sectlog) > XFS_MAX_SECTORSIZE_LOG            ||
         tsk_getu16(fs->endian, sbp->sb_sectsize) != (1 << tsk_getu8(fs->endian, sbp->sb_sectlog))          ||
         tsk_getu32(fs->endian, sbp->sb_blocksize) < XFS_MIN_BLOCKSIZE           ||
         tsk_getu32(fs->endian, sbp->sb_blocksize) > XFS_MAX_BLOCKSIZE           ||
-        //sbp->sb_blocklog < XFS_MIN_BLOCKSIZE_LOG ||
         tsk_getu8(fs->endian, sbp->sb_blocklog) < XFS_MIN_BLOCKSIZE_LOG            ||
-        //sbp->sb_blocksize != (1 << sbp->sb_blocklog) ||  
         tsk_getu8(fs->endian, sbp->sb_blocklog) > XFS_MAX_BLOCKSIZE_LOG            ||
         tsk_getu32(fs->endian, sbp->sb_blocksize) != ((uint32_t)1 << tsk_getu8(fs->endian, sbp->sb_blocklog))        ||
-        //sbp->sb_dirblklog + sbp->sb_blocklog > XFS_MAX_BLOCKSIZE_LOG    ||
         tsk_getu8(fs->endian, sbp->sb_dirblklog) + tsk_getu8(fs->endian, sbp->sb_blocklog) > XFS_MAX_BLOCKSIZE_LOG ||
         tsk_getu16(fs->endian, sbp->sb_inodesize) < XFS_DINODE_MIN_SIZE         ||
         tsk_getu16(fs->endian, sbp->sb_inodesize) > XFS_DINODE_MAX_SIZE         ||
-        //sbp->sb-
         tsk_getu8(fs->endian, sbp->sb_inodelog) < XFS_DINODE_MIN_LOG           ||
         tsk_getu8(fs->endian, sbp->sb_inodelog) > XFS_DINODE_MAX_LOG           ||
         tsk_getu16(fs->endian, sbp->sb_inodesize) != (1 << tsk_getu8(fs->endian, sbp->sb_inodelog))        ||
@@ -157,29 +92,13 @@ xfs_mount_validate_sb(
         tsk_getu8(fs->endian, sbp->sb_shared_vn) != 0)) {
         tsk_fprintf(stderr, "Superblock sanity check failed");
         return NULL;
-        //return -EFSCORRUPTED;
     }
 
     if (tsk_fs_guessu16(fs, sbp->sb_versionnum, XFS_SB_VERSION_5) &&
         tsk_getu32(fs->endian, sbp->sb_blocksize) < XFS_MIN_CRC_BLOCKSIZE) {
         tsk_fprintf(stderr, "v5 Superblock sanity check failed");
         return NULL;
-        //return -EFSCORRUPTED;
     }
-
-    /*
-     * disabled:: verify machine-dependency code
-     * Until this is fixed only page-sized or smaller data blocks work.
-     */
-    /*
-    if (unlikely(sbp->sb_blocksize > PAGE_SIZE)) {
-        xfs_warn(mp,
-        "File system with blocksize %d bytes. "
-        "Only pagesize (%ld) or less will currently work.",
-                sbp->sb_blocksize, PAGE_SIZE);
-        return -ENOSYS;
-    }
-    */
 
     /*
      * Currently only very few inode sizes are supported.
@@ -195,14 +114,6 @@ xfs_mount_validate_sb(
                 tsk_getu16(fs->endian, sbp->sb_inodesize));
         return -ENOSYS;
     }
-
-    /*
-    if (xfs_sb_validate_fsb_count(sbp, sbp->sb_dblocks) ||
-        xfs_sb_validate_fsb_count(sbp, sbp->sb_rblocks)) {
-        xfs_warn(mp,
-        "file system too large to be mounted on this system.");
-        return -EFBIG;
-    }*/
 
     return 0;
 }
@@ -234,15 +145,12 @@ static TSK_OFF_T
 xfs_make_data_run_extent(TSK_FS_INFO * fs_info, TSK_FS_ATTR * fs_attr,
     xfs_bmbt_rec_t* extent)
 {
-    // fprintf(stderr,"[i] xfs_make_data_run_extent:  - LINE : xfs_make_data_run_extent called\n");
-
     TSK_FS_ATTR_RUN *data_run;
     XFS_INFO * xfs = (XFS_INFO *)fs_info;
 
     if ((data_run = tsk_fs_attr_run_alloc()) == NULL)
         return 1;
     
-    //fprintf(stderr, " >>>> l0 : %ld  |  l1: %ld\n", tsk_getu64(fs_info->endian, extent->l0), tsk_getu64(fs_info->endian, extent->l1));
     xfs_bmbt_irec_t *irec = (xfs_bmbt_irec_t*)tsk_malloc(sizeof(xfs_bmbt_irec_t));
     xfs_bmbt_disk_get_all(xfs, extent, irec);
     
@@ -253,14 +161,10 @@ xfs_make_data_run_extent(TSK_FS_INFO * fs_info, TSK_FS_ATTR * fs_attr,
     data_run->addr = agno * tsk_getu32(fs_info->endian, xfs->fs->sb_agblocks) + blkno;
     data_run->len = irec->br_blockcount;
 
-    // fprintf(stderr, "[i] xfs_make_data_run_extent:%d  run_agno : %ld, run_blkno : %ld, run_soff: %lu\n",
-    //     __LINE__, agno, blkno, data_run->addr);
-
     if (tsk_fs_attr_add_run(fs_info, fs_attr, data_run)) {
         return 1;
     }
 
-    // fprintf(stderr,"[i] xfs_make_data_run_extent:  - LINE : xfs_make_data_run_extent passed\n");
     return 0;
 }
 
@@ -275,30 +179,12 @@ xfs_make_data_run_extent_index(TSK_FS_INFO * fs_info,
     TSK_FS_ATTR * fs_attr, TSK_FS_ATTR * fs_attr_extent,
     TSK_DADDR_T idx_block)
 {
-    //TSK_FS_META *fs_meta = fs_file->meta;
     TSK_OFF_T length = 0;
 
     fprintf(stderr, "[i] xfs_make_data_run_extent_index: xfs.c: %d - not implemented\n", __LINE__);
 
     return 1;
 }
-
-/** \internal
- * Get the number of extent blocks rooted at the given extent_header.
- * The count does not include the extent header passed as a parameter.
- *
- * @return the number of extent blocks, or -1 on error.
- */
-/*
-static int32_t
-xfs_extent_tree_index_count(TSK_FS_INFO * fs_info,
-    TSK_FS_META * fs_meta, xfs_extent_header * header)
-{
-    int count = 0;
-
-    return count;
-}
-*/
 
 /**
  * \internal
@@ -309,7 +195,6 @@ xfs_extent_tree_index_count(TSK_FS_INFO * fs_info,
 static uint8_t
 xfs_load_attrs_block(TSK_FS_FILE *fs_file)
 {
-    // fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - called.\n", __LINE__);
     TSK_FS_META *fs_meta = fs_file->meta;
     TSK_FS_INFO *fs_info = fs_file->fs_info;
     XFS_INFO * xfs = (XFS_INFO*)fs_info;
@@ -320,15 +205,6 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
 
     rec = (xfs_bmbt_rec_t*)fs_meta->content_ptr;    
     
-    // for(int i = 0 ; i < 16 ; i ++){
-    //     if(i < 8)
-    //         fprintf(stderr, "%2x ",  rec->l0[i]);
-    //     else
-    //         fprintf(stderr, "%2x ", rec->l1[i-8]);
-    // }
-    // fprintf(stderr, "\n");
-    //fprintf(stderr,">>>>> rec->l0 : %d   rec->l1 : %ld\n", tsk_getu64(fs_info->endian, rec->l0), tsk_getu64(fs_info->endian, rec->l1));
-      
     if ((fs_meta->attr != NULL)
         && (fs_meta->attr_state == TSK_FS_META_ATTR_STUDIED)) {
         fprintf(stderr, "[i] xfs_load_attr_block: xfs.c: %d - already studied, exiting load_attr_blk\n", __LINE__);
@@ -367,11 +243,8 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
         return 1;
     }
 
-    //rec = (xfs_bmbt_rec_t*)fs_meta->content_ptr;    
-
     while (true)
     {
-        //fprintf(stderr,">>>>> rec->l0 : %d   rec->l1 : %ld\n", tsk_getu64(fs_info->endian, rec->l0), tsk_getu64(fs_info->endian, rec->l1));
         if (tsk_getu64(fs_info->endian, rec->l0) == 0 && tsk_getu64(fs_info->endian, rec->l1) == 0)
             break;
            
@@ -398,24 +271,18 @@ xfs_load_attrs_block(TSK_FS_FILE *fs_file)
 static uint8_t
 xfs_load_attrs(TSK_FS_FILE * fs_file)
 {
-    // fprintf(stderr, "xfs.c: xfs_load_attrs called.\n");
     TSK_FS_META *fs_meta = fs_file->meta;
     TSK_FS_INFO * fs = (TSK_FS_INFO*)fs_file->fs_info;
     XFS_INFO *xfs = (XFS_INFO*)fs_file->fs_info;
 
     // not needed to implement about shortform data fork. shortform does not have location of real file.
-    if(fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS)
-    {
-        // fprintf(stderr, "contenttype = fork extent\n");
+    if (fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS) {
         xfs_load_attrs_block(fs_file);
     }
-    else if(fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BTREE)
-    {
-        // fprintf(stderr, "contenttype = btree fork\n");
+    else if (fs_file->meta->content_type == TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BTREE) {
         return 1;
     }
-    else
-    {
+    else {
         fprintf(stderr, "contenttype = unknown content type\n");
         return 1;
     }
@@ -452,20 +319,18 @@ xfs_dinode_load(XFS_INFO * xfs, TSK_INUM_T dino_inum,
         return 1;
     }
 
-    // fprintf(stderr, "\t\t[i] xfs_dinode_load before calling getoffset: inode num : %lx\n", dino_inum);
-
     addr = xfs_inode_get_offset(xfs, dino_inum);
     cnt = tsk_fs_read(fs, addr, (char *)dino_buf, xfs->inode_size);
     
-    // fprintf(stderr, "calculated inode offset  : %lx, inode read: %lu\n", addr, cnt);
-
     if (cnt != xfs->inode_size) {
         if (cnt >= 0) {
             tsk_error_reset();
             tsk_error_set_errno(TSK_ERR_FS_READ);
         }
+
         tsk_error_set_errstr2("xfs_dinode_load: Inode %" PRIuINUM
             " from %" PRIuOFF, dino_inum, addr);
+
         return 1;
     }
 
@@ -476,8 +341,6 @@ static uint8_t
 xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     TSK_INUM_T inum, const xfs_dinode * dino_buf)
 {
-    //fprintf(stderr, "xfs_dinode_copy called. inode : %d\n", inum);
-
     int i;
     TSK_FS_INFO *fs = (TSK_FS_INFO *) & xfs->fs_info;
     xfs_sb *sb = xfs->fs;
@@ -564,7 +427,6 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
      * The RO_COMPAT_LARGE_FILE flag in the super block will identify
      * if there are any large files in the file system
      */
-    
     fs_meta->uid = tsk_getu32(fs->endian, dino_buf->di_uid);
     fs_meta->gid = tsk_getu32(fs->endian, dino_buf->di_gid);
 
@@ -591,8 +453,8 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
          }
     }
     
-    // content_ptr에 data fork 영역 할당
-    // inode core 이후의 content 영역을 format에 맞게 content ptr에 복사해야함
+    // Allocating datafork area in content_ptr
+    // Contents after inode core must be copied to content ptr
     TSK_OFF_T dfork_offset = xfs_inode_get_offset(xfs, inum) + sizeof(xfs_dinode);
     
     char* content_buf = (char*)tsk_malloc(XFS_CONTENT_LEN_V5(xfs));
@@ -606,15 +468,12 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     fs_meta->content_ptr = (void*) content_buf;
 
     if (dino_buf->di_format == XFS_DINODE_FMT_LOCAL){
-        // fprintf(stderr, "[S] dinode_copy: xfs.c: %d - shortform type detected\n", __LINE__);
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_SHORTFORM;  
     }
     else if (dino_buf->di_format == XFS_DINODE_FMT_EXTENTS){
-        // fprintf(stderr, "[B] dinode_copy: xfs.c: %d - block type detected\n", __LINE__);
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_EXTENTS;
     }
     else if (dino_buf->di_format == XFS_DINODE_FMT_BTREE){
-        // fprintf(stderr, "[L] dinode_copy: xfs.c: %d - leaf type detected\n", __LINE__);
         fs_meta->content_type = TSK_FS_META_CONTENT_TYPE_XFS_DATA_FORK_BTREE;
     }
     else{
@@ -624,11 +483,9 @@ xfs_dinode_copy(XFS_INFO * xfs, TSK_FS_META * fs_meta,
     return 0;
 }    
 
-//inode walk
 uint8_t xfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum, TSK_INUM_T end_inum,
     TSK_FS_META_FLAG_ENUM flags, TSK_FS_META_WALK_CB a_action, void *a_ptr)
 {
-    // fprintf(stderr, "xfs_inode_walk called.\n");
     char *myname = "xfs_inode_walk";
     XFS_INFO * xfs = (XFS_INFO *) fs;
     TSK_INUM_T inum;
@@ -684,12 +541,7 @@ uint8_t xfs_inode_walk(TSK_FS_INFO * fs, TSK_INUM_T start_inum, TSK_INUM_T end_i
     
     if ((fs_file = tsk_fs_file_alloc(fs)) == NULL)
         return 1;
-    //if ((fs_file->meta =
-            //tsk_fs_meta_alloc( )) == NULL)
-    //    return 1;
 
-
-    // fprintf(stderr, "xfs_inode_walk passed.\n");
     return -1;
 }
 
@@ -742,7 +594,6 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
     size =
         xfs->inode_size > 
         sizeof(xfs_dinode) ? xfs->inode_size : sizeof(xfs_dinode);
-    // fprintf(stderr, "size of inode : %d\n", size);
 
     if((dino_buf = (xfs_dinode *)tsk_malloc(size)) == NULL){
         return 1;
@@ -759,7 +610,6 @@ xfs_inode_lookup(TSK_FS_INFO * fs, TSK_FS_FILE * a_fs_file,  // = file_add_meta
     }
 
     free(dino_buf);
-    // fprintf(stderr, "xfs_inode_lookup passed.\n");
     return 0;
 }
 
@@ -851,20 +701,17 @@ uint8_t xfs_fsstat(TSK_FS_INFO * fs, FILE * hFile)
     return -1;
 }
 
-//fscheck
 uint8_t xfs_fscheck(TSK_FS_INFO * fs, FILE * HFile)
 {
     return -1;
 }
 
-//istat
 uint8_t xfs_istat(TSK_FS_INFO * fs, TSK_FS_ISTAT_FLAG_ENUM flags, FILE * hFile, TSK_INUM_T inum,
             TSK_DADDR_T numblock, int32_t sec_skew)
 {
     return -1;
 }
 
-//close
 void xfs_close(TSK_FS_INFO * fs)
 {
     XFS_INFO * xfs = (XFS_INFO *) fs;
@@ -879,32 +726,10 @@ void xfs_close(TSK_FS_INFO * fs)
     return;
 }
 
-//jblk_walk
-/*
-uint8_t xfs_jblk_walk(TSK_FS_INFO * fs, TSK_DADDR_T, TSK_DADDR_T, int, TSK_FS_JBLK_WALK_CB, void *)
-{
-    return -1;
-}
-
-//jentry_walk
-uint8_t xfs_jentry_walk(TSK_FS_INFO *, int, TSK_FS_JENTRY_WALK_CB, void *)
-{
-    return -1;
-}
-
-//jopen
-uint8_t xfs_jopen(TSK_FS_INFO *, TSK_INUM_T)
-{
-    return -1;
-}
-*/
-
-
 TSK_FS_INFO *
 xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     TSK_FS_TYPE_ENUM ftype, uint8_t test)
 {
-    // fprintf(stderr, "xfs_open called!\n");
     XFS_INFO *xfs;
     unsigned int len;
     TSK_FS_INFO *fs;
@@ -925,7 +750,6 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         tsk_error_set_errstr("xfs_open: sector size is 0");
         return NULL;
     }
-    // fprintf(stderr, "xfs_open : sector size : %d\n", img_info->sector_size);
 
     if ((xfs = (XFS_INFO *) tsk_fs_malloc(sizeof(*xfs))) == NULL)
         return NULL;
@@ -937,7 +761,7 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->tag = TSK_FS_INFO_TAG;
 
     len = sizeof(xfs_sb);    
-    // fprintf(stderr, "xfs_open : superblock len : %d\n", len);
+
     if ((xfs->fs = (xfs_sb *) tsk_malloc(len)) == NULL) {
         fs->tag = 0;
         tsk_fs_free((TSK_FS_INFO *)xfs);
@@ -945,7 +769,7 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     }
 
     cnt = tsk_fs_read(fs, XFS_SBOFF, (char *) xfs->fs, len);
-    // fprintf(stderr, "xfs_open : read superblock size : %d\n", cnt);
+
     if (cnt != len){
         if (cnt >= 0) {
             tsk_error_reset();
@@ -976,28 +800,6 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
             fprintf(stderr, "xfs_open : invalid magic\n");
         return NULL;
     }
-    // fprintf(stderr, "xfs_open : passed here!\n");
-    /*
-    if (xfs_mount_validate_sb(fs, xfs->fs))
-    {
-        free(xfs->fs);
-        tsk_fs_free((TSK_FS_INFO *)xfs);
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_CORRUPT);
-        tsk_error_set_errstr("xfs_open: superblock validation failed");
-        if (tsk_verbose)
-            fprintf(stderr, "xfs_open: invalid superblock\n");
-        return NULL;
-    }
-    */
-    /* Read-Only checking?
-    if (tsk_verbose){
-        if(tsk_getu32(fs->endian, xfs->fs->sb_features_ro_compat)&
-        XFS_SB_FEAT_RO_COMPAT_ALL)
-            tsk_fprintf(stderr, "File system has")
-
-    }
-    */
 
     fs->inum_count = tsk_getu64(fs->endian, xfs->fs->sb_icount);
     fs->last_inum = 0xFFFFFFFFFFFFFFFF;
@@ -1027,27 +829,11 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
      * Calculate the block info
      */
     fs->dev_bsize = img_info->sector_size;
-    /* journaling
-    if (tsk_getu32(fs->endian,
-            xfs->fs->
-            s_feature_incompat) & EXT2FS_FEATURE_INCOMPAT_64BIT) {
-//        printf("DEBUG fs_open: 64bit file system\n");
-        fs->block_count =
-            ext4_getu64(fs->endian, ext2fs->fs->s_blocks_count_hi,
-            ext2fs->fs->s_blocks_count);
-    }
-    else {
-        fs->block_count =
-            tsk_getu32(fs->endian, ext2fs->fs->s_blocks_count);
-    }*/
-    
     fs->first_block = 0;
     fs->block_count = (TSK_DADDR_T)tsk_getu64(fs->endian, xfs->fs->sb_dblocks);
     fs->last_block_act = fs->last_block = fs->block_count - 1;
-    //xfs->first_data_block = ;
-    //fs->block_count = 
-    
     fs->block_size = tsk_getu32(fs->endian, xfs->fs->sb_blocksize);
+
     if((fs->block_size == 0) || (fs->block_size % 512)){
         fs->tag = 0;
         free(xfs->fs);
@@ -1065,101 +851,14 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
         fs->last_block_act =
             (img_info->size - offset) / fs->block_size - 1;
 
-    
-    //xfs->ags_offset ㅁags_offset 채워줘야 함
-
     /* Volume ID */
     for(fs->fs_id_used = 0 ; fs->fs_id_used < 16; fs->fs_id_used++){
         fs->fs_id[fs->fs_id_used] = xfs->fs->sb_uuid[fs->fs_id_used];
     }
 
-
-    /*
-    xfs->first_data_block =
-        tsk_getu32(fs->endian, ext2fs->fs->s_first_data_block);
-    if (tsk_getu32(fs->endian, ext2fs->fs->s_log_block_size) !=
-        tsk_getu32(fs->endian, ext2fs->fs->s_log_frag_size)) {
-        fs->tag = 0;
-        free(ext2fs->fs);
-        tsk_fs_free((TSK_FS_INFO *)ext2fs);
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_UNSUPFUNC);
-        tsk_error_set_errstr
-            ("This file system has fragments that are a different size than blocks, which is not currently supported\nContact brian with details of the system that created this image");
-        if (tsk_verbose)
-            fprintf(stderr,
-                "xfs_open: fragment size not equal to block size\n");
-        return NULL;
-    }
-    
-    fs->block_size =
-        XFS_MIN_BLOCKSIZE << tsk_getu32(fs->endian,
-        xfs->fs->sb_blocklog);
-    */
-    // determine the last block we have in this image
-    /*
-    if ((TSK_DADDR_T) ((img_info->size - offset) / fs->block_size) <
-        fs->block_count)
-        fs->last_block_act =
-            (img_info->size - offset) / fs->block_size - 1;
-    */
-       /* The group descriptors are located in the block following the
-     * super block */
-    /*
-    xfs->groups_offset =
-        roundup((XFS_SBOFF + sizeof(xfs_sb)), fs->block_size);
-    // sanity check to avoid divide by zero issues
-    if (tsk_getu32(fs->endian, ext2fs->fs->s_blocks_per_group) == 0) {
-        fs->tag = 0;
-        free(ext2fs->fs);
-        tsk_fs_free((TSK_FS_INFO *)ext2fs);
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
-        tsk_error_set_errstr("Not an EXTxFS file system (blocks per group)");
-        if (tsk_verbose)
-            fprintf(stderr, "ext2fs_open: blocks per group is 0\n");
-        return NULL;
-    }
-    if (tsk_getu32(fs->endian, ext2fs->fs->s_inodes_per_group) == 0) {
-        fs->tag = 0;
-        free(ext2fs->fs);
-        tsk_fs_free((TSK_FS_INFO *)ext2fs);
-        tsk_error_reset();
-        tsk_error_set_errno(TSK_ERR_FS_MAGIC);
-        tsk_error_set_errstr("Not an EXTxFS file system (inodes per group)");
-        if (tsk_verbose)
-            fprintf(stderr, "ext2fs_open: inodes per group is 0\n");
-        return NULL;
-    }
-    if (tsk_getu32(fs->endian,
-            ext2fs->fs->
-            s_feature_incompat) & EXT2FS_FEATURE_INCOMPAT_64BIT) {
-        ext2fs->groups_count =
-            (EXT2_GRPNUM_T) ((ext4_getu64(fs->endian,
-                    ext2fs->fs->s_blocks_count_hi,
-                    ext2fs->fs->s_blocks_count)
-                - ext2fs->first_data_block + tsk_getu32(fs->endian,
-                    ext2fs->fs->s_blocks_per_group) - 1)
-            / tsk_getu32(fs->endian, ext2fs->fs->s_blocks_per_group));
-    }
-    else {
-        xfs->groups_count =
-            (EXT2_GRPNUM_T) ((tsk_getu32(fs->endian,
-                    ext2fs->fs->s_blocks_count) -
-                ext2fs->first_data_block + tsk_getu32(fs->endian,
-                    ext2fs->fs->s_blocks_per_group) -
-                1) / tsk_getu32(fs->endian,
-                ext2fs->fs->s_blocks_per_group));
-    }
-    */
-    /* Volume ID */
-    //for (fs->fs_id_used = 0; fs->fs_id_used < 16; fs->fs_id_used++) {
-    //    fs->fs_id[fs->fs_id_used] = ext2fs->fs->s_uuid[fs->fs_id_used];
-    //}
-
     /* Set the generic function pointers */
-    fs->inode_walk = xfs_inode_walk; // uint8_t xfs_inode_walk() 구현
-    fs->block_walk = xfs_block_walk; // 
+    fs->inode_walk = xfs_inode_walk;
+    fs->block_walk = xfs_block_walk;
     fs->block_getflags = xfs_block_getflags;
 
     fs->get_default_attr_type = tsk_fs_unix_get_default_attr_type;
@@ -1172,26 +871,6 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
     fs->istat = xfs_istat;
     fs->name_cmp = tsk_fs_unix_name_cmp;
     fs->close = xfs_close;
-
-    /* Journal */
-    //fs->journ_inum = tsk_getu32(fs->endian, xfs->fs->s_journal_inum);
-    //fs->jblk_walk = xfs_jblk_walk;
-    //fs->jentry_walk = xfs_jentry_walk;
-    //fs->jopen = xfs_jopen;
-
-    /* initialize the caches */
-    /* inode map */
-    //xfs->imap_buf = NULL;
-    //xfs->imap_grp_num = 0xffffffff;
-
-    /* block map */
-    //xfs->bmap_buf = NULL;
-    //xfs->bmap_grp_num = 0xffffffff; 
-
-    /* group descriptor */
-    //xfs->grp_buf = NULL;
-    //xfs->grp_num = 0xffffffff;
-    
 
     /*
      * Print some stats.
@@ -1206,20 +885,7 @@ xfs_open(TSK_IMG_INFO * img_info, TSK_OFF_T offset,
                 xfs->fs->sb_inopblock));
 
     tsk_init_lock(&xfs->lock);
-    //fprintf
-    // fprintf(stderr, "block count : %d\n", fs->block_count);
-    // fprintf(stderr, "first inum  : %d\n", fs->first_inum);
-    // fprintf(stderr, "root inum   : %d\n", fs->root_inum);
-    // fprintf(stderr, "endian      : %d\n", fs->endian);
-    // fprintf(stderr, "block size  : %d\n", fs->block_size);
-    // fprintf(stderr, "inode size  : %d\n", xfs->inode_size);
-    // fprintf(stderr, "ag_num      : %d\n", xfs->ag_num);
-    // fprintf(stderr, "ag count    : %d\n", xfs->ags_count);
-    // fprintf(stderr, "ag offset   : %d\n", xfs->ags_offset);
-    // fprintf(stderr, "last block act : %d\n", fs->last_block_act);
 
-    /* Set the generic function pointers */
-    // fprintf(stderr, "xfs_open passed exception!\n");
     return (fs);
 }
 
