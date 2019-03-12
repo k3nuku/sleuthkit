@@ -15,7 +15,6 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-//#include <uuid/uuid.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -807,8 +806,7 @@ struct xfs_dir3_blk_hdr {
     uint32_t          crc;    /* CRC of block */
     uint64_t          blkno;  /* first block of the buffer */
     uint64_t          lsn;    /* sequence number of last write */
-    //uuid_t          uuid;   /* filesystem we belong to */
-    uint64_t          uuid[2];
+    uint64_t          uuid[2];/* filesystem we belong to */
     uint64_t          owner;  /* inode that owns the block */
 };
 
@@ -978,7 +976,6 @@ struct xfs_btree_block_shdr {
 
     uint64_t      bb_blkno;
     uint64_t      bb_lsn;
-    //uuid_t        bb_uuid;
     uint64_t      bb_uuid[2];
     uint32_t      bb_owner;
     uint32_t      bb_crc;
@@ -992,7 +989,6 @@ struct xfs_btree_block_lhdr {
 
     uint64_t      bb_blkno;
     uint64_t      bb_lsn;
-    //uuid_t       bb_uuid;
     uint64_t      bb_uuid[2];
     uint64_t      bb_owner;
     uint32_t    bb_crc;
