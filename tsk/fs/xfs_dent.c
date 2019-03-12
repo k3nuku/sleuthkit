@@ -175,6 +175,7 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     uint8_t ftype;
     uint8_t namelen;
     uint64_t inode;
+    uint64_t i;
 
     if ((fs_name = tsk_fs_name_alloc(XFS_MAXNAMELEN + 1, 0)) == NULL)
         return TSK_ERR;
@@ -183,7 +184,7 @@ xfs_dent_parse_shortform(XFS_INFO * xfs, TSK_FS_DIR * a_fs_dir,
     
     uint16_t num_entries = (hdr->i8count > 0) ? hdr->i8count : hdr->count;
 
-    for (int i = 0; i < num_entries; i++)
+    for (i = 0; i < num_entries; i++)
     {
         dir2_sf->entry = ent;
         namelen = ent->namelen;
